@@ -98,8 +98,9 @@ class NoteModel(QAbstractTableModel):
 
 
 class NoteEditDelegate(QStyledItemDelegate):
-    def __init__(self):
+    def __init__(self, model):
         super().__init__()
+        self.model = model
 
     def createEditor(self, parent: QWidget, option: 'QStyleOptionViewItem', index: QModelIndex):
         return super(NoteEditDelegate, self).createEditor(parent, option, index)
@@ -112,8 +113,12 @@ class NoteEditDelegate(QStyledItemDelegate):
         if index.data():
             if option.state & QStyle.State_Selected:
                 painter.fillRect(option.rect, option.palette.highlight())
-            # painter.fillRect(option.rect, Qt.red)
-            # painter.drawText(option.rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
+
+            clip_rect = self.clip_rect_on_row(option.rect, index)
+            if clip_rect:
+                print('\tset clip')
+                painter.setClipRect(clip_rect)
+            painter.fillRect(option.rect, Qt.yellow)
             fm = QtGui.QFontMetrics(option.font)
             fh = fm.height() + fm.descent()
             painter.drawText(option.rect.x(), option.rect.y() + fh, index.data())
@@ -122,6 +127,20 @@ class NoteEditDelegate(QStyledItemDelegate):
         else:
             QStyledItemDelegate.paint(self, painter, option, index)
 
+    def clip_rect_on_row(self, cur_rect, cur_index):
+        ''' cur to first row has data '''
+        r = cur_index.row()
+        col_w = 50
+        print('{}:{}={}'.format(cur_index.row(), cur_index.column(), cur_index.data()))
+        for c in range(cur_index.column() + 1, self.model.columnCount()):
+            i = self.model.index(r, c)
+            if i.isValid() and i.data():
+                rect = QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() + (c - cur_index.column() - 1) * col_w,
+                        cur_rect.height())
+                print('\t1st right data, c={}, {}:{}={}, rect={},{},{},{}'.format((c - cur_index.column()), i.row(), i.column(), i.data(), rect.x(), rect.y(), rect.width(), rect.height()))
+                return rect
+        return None
+
 
 class NoteView(QTableView):
     def __init__(self):
@@ -129,12 +148,28 @@ class NoteView(QTableView):
 
     def keyPressEvent(self, e: QtGui.QKeyEvent):
         key = e.key()
+        mods = QApplication.keyboardModifiers()
         if key == Qt.Key_Return:
-            self.edit(self.currentIndex())
+            # self.enter_edit_mode()
+            if mods == Qt.ShiftModifier:
+                self.move_to_prev_row()
+            else:
+                self.move_to_next_row()
             e.accept()
         else:
             e.ignore()
         super(NoteView, self).keyPressEvent(e)
+
+    def enter_edit_mode(self):
+        self.edit(self.currentIndex())
+
+    def move_to_prev_row(self):
+        cur = self.currentIndex()
+        self.setCurrentIndex(self.model().index(cur.row() - 1, cur.column()))
+
+    def move_to_next_row(self):
+        cur = self.currentIndex()
+        self.setCurrentIndex(self.model().index(cur.row() + 1, cur.column()))
 
 
 default_list_data = [NoteData(0, 0, 'a'),
@@ -155,7 +190,7 @@ class MainWindow(QMainWindow):
         self.model = model
 
         self.view.setModel(model)
-        item_delegate = NoteEditDelegate()
+        item_delegate = NoteEditDelegate(self.model)
         # item_delegate.setClipping(False)
         self.view.setItemDelegate(item_delegate)
         self.view.setModel(self.model)
