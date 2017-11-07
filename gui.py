@@ -122,6 +122,7 @@ class NoteEditDelegate(QStyledItemDelegate):
             fm = QtGui.QFontMetrics(option.font)
             fh = fm.height() + fm.descent()
             painter.drawText(option.rect.x(), option.rect.y() + fh, index.data())
+            # painter.drawText(QRect(option.rect.x(), option.rect.y(), 45, 100), Qt.AlignLeft | Qt.AlignVCenter, index.data())
 
             painter.drawLine(QPoint(option.rect.x(), option.rect.y()), QPoint(option.rect.x() + 100, option.rect.y()))
         else:
@@ -139,7 +140,8 @@ class NoteEditDelegate(QStyledItemDelegate):
                         cur_rect.height())
                 print('\t1st right data, c={}, {}:{}={}, rect={},{},{},{}'.format((c - cur_index.column()), i.row(), i.column(), i.data(), rect.x(), rect.y(), rect.width(), rect.height()))
                 return rect
-        return None
+        tc = self.model.columnCount()
+        return QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() * (tc - cur_index.column() - 1), cur_rect.height())
 
 
 class NoteView(QTableView):
