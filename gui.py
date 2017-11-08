@@ -6,6 +6,9 @@ from PyQt5.QtWidgets import *
 from PyQt5 import uic, QtGui
 from PyQt5.QtCore import *
 
+import common_util as co
+from widgets import *
+
 
 form_class = uic.loadUiType("./resource/mainwindow.ui")[0]
 
@@ -22,8 +25,7 @@ class NoteData:
         self.r = r
         self.c = c
         self.content = content
-        # self.bgcolor = bgcolor
-        self.bgcolor = Qt.yellow
+        self.bgcolor = bgcolor
 
 
 class NoteModel(QAbstractTableModel):
@@ -149,7 +151,9 @@ class NoteView(QTableView):
         mods = QApplication.keyboardModifiers()
         if key == Qt.Key_Return:
             # self.enter_edit_mode()
-            if mods == Qt.ShiftModifier:
+            if mods == Qt.ControlModifier:
+                self.enter_edit_mode()
+            elif mods == Qt.ShiftModifier:
                 self.move_to_prev_row()
             else:
                 self.move_to_next_row()
@@ -189,9 +193,11 @@ default_list_data = [NoteData(0, 0, 'a'),
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setupUi(self)
+        self.setup_ui(self)
 
-        model = self.load_model_from_file()
+        self.curr_file = None
+
+        model = self.load_model_from_file(co.load_settings('last_file'))
         if not model:
             model = NoteModel(default_list_data)
         self.model = model
@@ -206,17 +212,11 @@ class MainWindow(QMainWindow):
         for c in range(self.model.columnCount()):
             self.view.setColumnWidth(c, 50)
 
-    def keyPressEvent(self, e: QtGui.QKeyEvent):
-        key = e.key()
-        mod = QApplication.keyboardModifiers()
-        if key == Qt.Key_S and mod == Qt.ControlModifier:
-            self.save()
-            e.accept()
-        else:
-            e.ignore()
-        super().keyPressEvent(e)
+        self.btn_open.clicked.connect(lambda state: self.open(self.fch_open.path()))
+        self.btn_save.clicked.connect(lambda state: self.save(self.curr_file))
+        self.btn_save_as.clicked.connect(self.save)
 
-    def setupUi(self, dummy):
+    def setup_ui(self, dummy):
         self.setGeometry(100, 100, 800, 600)
 
         gridlayout = QGridLayout()
@@ -224,12 +224,14 @@ class MainWindow(QMainWindow):
         self.centralWidget().setLayout(gridlayout)
 
         buttonlayout = QHBoxLayout()
+        self.fch_open = FileChooser()
         self.btn_open = QPushButton('open')
         self.btn_save = QPushButton('save')
-        self.btn_open.clicked.connect(self.open)
-        self.btn_save.clicked.connect(self.save)
+        self.btn_save_as = QPushButton('save as')
+        buttonlayout.addWidget(self.fch_open)
         buttonlayout.addWidget(self.btn_open)
         buttonlayout.addWidget(self.btn_save)
+        buttonlayout.addWidget(self.btn_save_as)
 
         gridlayout.addLayout(buttonlayout, 0, 0)
 
@@ -237,25 +239,44 @@ class MainWindow(QMainWindow):
         self.view = NoteView()
         gridlayout.addWidget(self.view, 1, 0)
 
-    def load_model_from_file(self):
-        if not os.path.exists('save.txt'):
+    def keyPressEvent(self, e: QtGui.QKeyEvent):
+        key = e.key()
+        mod = QApplication.keyboardModifiers()
+        if key == Qt.Key_S and mod == Qt.ControlModifier:
+            self.save(self.curr_file)
+            e.accept()
+        else:
+            e.ignore()
+        super().keyPressEvent(e)
+
+    def load_model_from_file(self, path):
+        if not path:
             return None
 
-        with open('save.txt', 'rb') as f:
+        self.curr_file = path
+        if not os.path.exists(path):
+            return None
+
+        self.fch_open.set_path(self.curr_file)
+        with open(path, 'rb') as f:
             model = NoteModel(pickle.load(f))
             return model
 
-    def open(self):
-        model = self.load_model_from_file()
+    def open(self, path):
+        model = self.load_model_from_file(path)
         if model:
             self.model = model
             self.view.setModel(model)
             self.view.show()
+            co.save_settings('last_file', self.curr_file)
         else:
             QMessageBox.warning(self, 'open', "couldn't find file")
 
-    def save(self):
-        with open('save.txt', 'wb') as f:
+    def save(self, path):
+        if not path:
+            path, _ = QFileDialog.getSaveFileName(self, 'select save file')
+
+        with open(path, 'wb') as f:
             pickle.dump(self.model.get_src_data(), f)
 
 
