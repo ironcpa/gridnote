@@ -1,3 +1,5 @@
+# -*-coding:utf-8-*-
+
 import os
 import sys
 import typing
@@ -54,6 +56,7 @@ class NoteModel(QAbstractTableModel):
         for i, e in enumerate(self.src_data):
             if e.r == index.row() and e.c == index.column():
                 del self.src_data[i]
+                self.dataChanged.emit(index, index)
                 return
 
     def has_data_at(self, index):
@@ -98,6 +101,13 @@ class NoteModel(QAbstractTableModel):
             return True
         return False
 
+    def insert_all_row(self, from_index, rows = 1):
+        for e in self.src_data:
+            if e.r >= from_index.row():
+                e.r += rows
+
+        self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount(), self.columnCount()))
+
 
 class NoteEditDelegate(QStyledItemDelegate):
     def __init__(self, model):
@@ -113,16 +123,19 @@ class NoteEditDelegate(QStyledItemDelegate):
 
     def paint(self, painter: QtGui.QPainter, option: 'QStyleOptionViewItem', index: QModelIndex):
         if index.data():
+            if index.data(Qt.BackgroundRole):
+                painter.fillRect(option.rect, index.data(Qt.BackgroundRole))
+
             if option.state & QStyle.State_Selected:
                 painter.fillRect(option.rect, option.palette.highlight())
 
             clip_rect = self.clip_rect_on_row(option.rect, index)
             if clip_rect:
                 painter.setClipRect(clip_rect)
-            fm = QtGui.QFontMetrics(option.font)
-            fh = fm.height() + fm.descent()
-            painter.drawText(option.rect.x(), option.rect.y() + fh, index.data())
-            # painter.drawText(clip_rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
+            # fm = QtGui.QFontMetrics(option.font)
+            # fh = fm.height() + fm.descent()
+            # painter.drawText(option.rect.x(), option.rect.y() + fh, index.data())
+            painter.drawText(clip_rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
         else:
             QStyledItemDelegate.paint(self, painter, option, index)
 
@@ -210,10 +223,12 @@ class MainWindow(QMainWindow):
         self.view.setShowGrid(False)
         for c in range(self.model.columnCount()):
             self.view.setColumnWidth(c, 50)
+            self.view.setRowHeight(c, 30)
 
         self.btn_open.clicked.connect(self.open)
         self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
         self.btn_save_as.clicked.connect(lambda state: self.save())
+        self.btn_bg_color.clicked.connect(self.set_color)
 
     def setup_ui(self, dummy):
         self.setGeometry(100, 100, 800, 600)
@@ -227,10 +242,12 @@ class MainWindow(QMainWindow):
         self.btn_open = QPushButton('open')
         self.btn_save = QPushButton('save')
         self.btn_save_as = QPushButton('save as')
+        self.btn_bg_color = QPushButton('b-color')
         buttonlayout.addWidget((self.txt_path))
         buttonlayout.addWidget(self.btn_open)
         buttonlayout.addWidget(self.btn_save)
         buttonlayout.addWidget(self.btn_save_as)
+        buttonlayout.addWidget(self.btn_bg_color)
 
         gridlayout.addLayout(buttonlayout, 0, 0)
 
@@ -243,6 +260,12 @@ class MainWindow(QMainWindow):
         mod = QApplication.keyboardModifiers()
         if key == Qt.Key_S and mod == Qt.ControlModifier:
             self.save(self.curr_path)
+            e.accept()
+        elif key == Qt.Key_Delete:
+            self.delete_selected()
+            e.accept()
+        elif key == Qt.Key_I and mod == Qt.ControlModifier:
+            self.insert_all_row()
             e.accept()
         else:
             e.ignore()
@@ -284,6 +307,21 @@ class MainWindow(QMainWindow):
 
         if is_new_save:
             self.open(path)
+
+    def delete_selected(self):
+        indexes = self.view.selectionModel().selectedIndexes()
+        for i in indexes:
+            self.model.del_data_at(i)
+
+    def insert_all_row(self):
+        cur_i = self.view.currentIndex()
+        self.model.insert_all_row(cur_i)
+
+    def set_color(self):
+        color = QColorDialog.getColor()
+        cur_i = self.view.currentIndex()
+        self.model.data_at(cur_i).bgcolor = color
+        self.view.update(cur_i)
 
 
 def catch_exceptions(self, t, val, tb):
