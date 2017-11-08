@@ -195,14 +195,13 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setup_ui(self)
 
-        self.curr_file = None
+        self.curr_path = None
 
-        model = self.load_model_from_file(co.load_settings('last_file'))
-        if not model:
-            model = NoteModel(default_list_data)
-        self.model = model
+        self.open(co.load_settings('last_file'))
+        if not self.model:
+            self.model = NoteModel(default_list_data)
 
-        self.view.setModel(model)
+        self.view.setModel(self.model)
         item_delegate = NoteEditDelegate(self.model)
         # item_delegate.setClipping(False)
         self.view.setItemDelegate(item_delegate)
@@ -212,9 +211,9 @@ class MainWindow(QMainWindow):
         for c in range(self.model.columnCount()):
             self.view.setColumnWidth(c, 50)
 
-        self.btn_open.clicked.connect(lambda state: self.open(self.fch_open.path()))
-        self.btn_save.clicked.connect(lambda state: self.save(self.curr_file))
-        self.btn_save_as.clicked.connect(self.save)
+        self.btn_open.clicked.connect(self.open)
+        self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
+        self.btn_save_as.clicked.connect(lambda state: self.save())
 
     def setup_ui(self, dummy):
         self.setGeometry(100, 100, 800, 600)
@@ -224,11 +223,11 @@ class MainWindow(QMainWindow):
         self.centralWidget().setLayout(gridlayout)
 
         buttonlayout = QHBoxLayout()
-        self.fch_open = FileChooser()
+        self.txt_path = QLineEdit()
         self.btn_open = QPushButton('open')
         self.btn_save = QPushButton('save')
         self.btn_save_as = QPushButton('save as')
-        buttonlayout.addWidget(self.fch_open)
+        buttonlayout.addWidget((self.txt_path))
         buttonlayout.addWidget(self.btn_open)
         buttonlayout.addWidget(self.btn_save)
         buttonlayout.addWidget(self.btn_save_as)
@@ -243,7 +242,7 @@ class MainWindow(QMainWindow):
         key = e.key()
         mod = QApplication.keyboardModifiers()
         if key == Qt.Key_S and mod == Qt.ControlModifier:
-            self.save(self.curr_file)
+            self.save(self.curr_path)
             e.accept()
         else:
             e.ignore()
@@ -253,31 +252,38 @@ class MainWindow(QMainWindow):
         if not path:
             return None
 
-        self.curr_file = path
         if not os.path.exists(path):
             return None
 
-        self.fch_open.set_path(self.curr_file)
         with open(path, 'rb') as f:
             model = NoteModel(pickle.load(f))
             return model
 
-    def open(self, path):
+    def open(self, path = None):
+        if not path:
+            path, _ = QFileDialog.getOpenFileName(self, 'select open file')
+
         model = self.load_model_from_file(path)
         if model:
             self.model = model
             self.view.setModel(model)
             self.view.show()
-            co.save_settings('last_file', self.curr_file)
+            self.txt_path.setText(path)
+            self.curr_path = path
+            co.save_settings('last_file', self.curr_path)
         else:
             QMessageBox.warning(self, 'open', "couldn't find file")
 
-    def save(self, path):
-        if not path:
+    def save(self, path = None):
+        is_new_save = path is None
+        if is_new_save:
             path, _ = QFileDialog.getSaveFileName(self, 'select save file')
 
         with open(path, 'wb') as f:
             pickle.dump(self.model.get_src_data(), f)
+
+        if is_new_save:
+            self.open(path)
 
 
 def catch_exceptions(self, t, val, tb):
