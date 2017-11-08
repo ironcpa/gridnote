@@ -116,15 +116,11 @@ class NoteEditDelegate(QStyledItemDelegate):
 
             clip_rect = self.clip_rect_on_row(option.rect, index)
             if clip_rect:
-                print('\tset clip')
                 painter.setClipRect(clip_rect)
-            painter.fillRect(option.rect, Qt.yellow)
             fm = QtGui.QFontMetrics(option.font)
             fh = fm.height() + fm.descent()
             painter.drawText(option.rect.x(), option.rect.y() + fh, index.data())
-            # painter.drawText(QRect(option.rect.x(), option.rect.y(), 45, 100), Qt.AlignLeft | Qt.AlignVCenter, index.data())
-
-            painter.drawLine(QPoint(option.rect.x(), option.rect.y()), QPoint(option.rect.x() + 100, option.rect.y()))
+            # painter.drawText(clip_rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
         else:
             QStyledItemDelegate.paint(self, painter, option, index)
 
@@ -162,6 +158,10 @@ class NoteView(QTableView):
             e.ignore()
         super(NoteView, self).keyPressEvent(e)
 
+    def currentChanged(self, current: QModelIndex, previous: QModelIndex):
+        self.update_clipable_cells(previous)
+        super(NoteView, self).currentChanged(current, previous)
+
     def enter_edit_mode(self):
         self.edit(self.currentIndex())
 
@@ -172,6 +172,11 @@ class NoteView(QTableView):
     def move_to_next_row(self):
         cur = self.currentIndex()
         self.setCurrentIndex(self.model().index(cur.row() + 1, cur.column()))
+
+    def update_clipable_cells(self, base_index):
+        for c in range(base_index.column() + 1):
+            i = self.model().index(base_index.row(), c)
+            self.update(i)
 
 
 default_list_data = [NoteData(0, 0, 'a'),
