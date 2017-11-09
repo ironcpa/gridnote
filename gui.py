@@ -129,9 +129,8 @@ class NoteModel(QAbstractTableModel):
 
 
 class NoteEditDelegate(QStyledItemDelegate):
-    def __init__(self, model):
+    def __init__(self):
         super().__init__()
-        self.model = model
 
     def createEditor(self, parent: QWidget, option: 'QStyleOptionViewItem', index: QModelIndex):
         return super(NoteEditDelegate, self).createEditor(parent, option, index)
@@ -147,7 +146,6 @@ class NoteEditDelegate(QStyledItemDelegate):
 
             if option.state & QStyle.State_Selected:
                 painter.fillRect(option.rect, option.palette.highlight())
-                print('{}:{}, draw selected'.format(index.row(), index.column()))
 
             avail_rect = self.clip_rect_on_row(option.rect, index)
             # if avail_rect:
@@ -160,18 +158,16 @@ class NoteEditDelegate(QStyledItemDelegate):
             QStyledItemDelegate.paint(self, painter, option, index)
 
     def clip_rect_on_row(self, cur_rect, cur_index):
-        ''' cur to first row has data '''
+        model = cur_index.model()
         r = cur_index.row()
         col_w = 50
-        print('{}:{}={}'.format(cur_index.row(), cur_index.column(), cur_index.data()))
-        for c in range(cur_index.column() + 1, self.model.columnCount()):
-            i = self.model.index(r, c)
+        for c in range(cur_index.column() + 1, model.columnCount()):
+            i = model.index(r, c)
             if i.isValid() and i.data():
                 rect = QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() + (c - cur_index.column() - 1) * col_w,
                         cur_rect.height())
-                print('\t1st right data, c={}, {}:{}={}, rect={},{},{},{}'.format((c - cur_index.column()), i.row(), i.column(), i.data(), rect.x(), rect.y(), rect.width(), rect.height()))
                 return rect
-        tc = self.model.columnCount()
+        tc = model.columnCount()
         return QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() * (tc - cur_index.column() - 1), cur_rect.height())
 
 
@@ -234,9 +230,7 @@ class MainWindow(QMainWindow):
         if not self.model:
             self.model = NoteModel(default_list_data)
 
-        self.view.setModel(self.model)
-        item_delegate = NoteEditDelegate(self.model)
-        self.view.setItemDelegate(item_delegate)
+        self.view.setItemDelegate(NoteEditDelegate())
         self.view.setModel(self.model)
 
         self.view.setShowGrid(False)
