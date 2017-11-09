@@ -4,6 +4,8 @@ import os
 import sys
 import typing
 import pickle
+import io
+import csv
 from PyQt5.QtWidgets import *
 from PyQt5 import uic, QtGui
 from PyQt5.QtCore import *
@@ -59,6 +61,7 @@ class NoteModel(QAbstractTableModel):
             data.content = value
         else:
             self.src_data.append(NoteData(index.row(), index.column(), value))
+        self.dataChanged.emit(index, index)
 
     def del_data_at(self, index):
         for i, e in enumerate(self.src_data):
@@ -297,6 +300,12 @@ class MainWindow(QMainWindow):
         elif key == Qt.Key_K and mod == Qt.ControlModifier:
             self.delete_all_row()
             e.accept()
+        elif key == Qt.Key_C and mod == Qt.ControlModifier:
+            self.copy_to_clipboard()
+            e.accept()
+        elif key == Qt.Key_V and mod == Qt.ControlModifier:
+            self.paste_from_clipboard()
+            e.accept()
         else:
             e.ignore()
         super().keyPressEvent(e)
@@ -383,6 +392,34 @@ class MainWindow(QMainWindow):
         cur_i = self.view.currentIndex()
         self.model.data_at(cur_i).bgcolor = color
         self.view.update(cur_i)
+
+    def copy_to_clipboard(self):
+        selections = self.view.selectedIndexes()
+        if selections:
+            rows = sorted(i.row() for i in selections)
+            cols = sorted(i.column() for i in selections)
+            rowcount = rows[-1] - rows[0] + 1
+            colcount = cols[-1] - cols[0] + 1
+            table = [[''] * colcount for _ in range(rowcount)]
+            for i in selections:
+                row = i.row() - rows[0]
+                col = i.column() - cols[0]
+                table[row][col] = i.data()
+            stream = io.StringIO()
+            csv.writer(stream).writerows(table)
+            QApplication.clipboard().setText(stream.getvalue())
+
+    def paste_from_clipboard(self):
+        text = QApplication.clipboard().text()
+        print(text)
+        print('>>>>>>')
+        cur_i = self.view.currentIndex()
+        for r, l in enumerate(text.splitlines()):
+            for c, t in enumerate(l.split(',')):
+                i = self.model.index(cur_i.row() + r, cur_i.column() + c)
+                self.model.set_data_at(i, t)
+        # self.model.dataChanged(cur_i, self.model.index(r, c))
+        # self.view.reset()
 
 
 def catch_exceptions(self, t, val, tb):
