@@ -41,8 +41,9 @@ class StyleData:
 
 
 class NoteModel(QAbstractTableModel):
-    def __init__(self, src_data):
+    def __init__(self, src_data, undostack):
         super().__init__()
+        self.undostack = undostack
         self.src_data = src_data
         self.max_row = 100
         self.max_col = 100
@@ -107,7 +108,9 @@ class NoteModel(QAbstractTableModel):
                 if self.has_data_at(index):
                     self.del_data_at(index)
                     return False
-            self.set_data_at(index, value)
+            cmd = SetDataCommand(index, value)
+            self.undostack.push(cmd)
+            # self.set_data_at(index, value)
             self.dataChanged.emit(index, index)
             return True
         return False
@@ -120,9 +123,7 @@ class NoteModel(QAbstractTableModel):
         self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount(), self.columnCount()))
 
     def delete_all_row(self, from_index, rows = 1):
-        for e in self.src_data:
-            if e.r == from_index.row():
-                self.src_data.remove(e)
+        self.src_data = [e for e in self.src_data if e.r != from_index.row()]
 
         for e in self.src_data:
             if e.r > from_index.row():
@@ -227,6 +228,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setup_ui(self)
 
+        self.undostack = QUndoStack()
         self.curr_path = None
 
         self.open(co.load_settings('last_file'))
@@ -306,6 +308,9 @@ class MainWindow(QMainWindow):
         elif key == Qt.Key_V and mod == Qt.ControlModifier:
             self.paste_from_clipboard()
             e.accept()
+        elif key == Qt.Key_Z and mod == Qt.ControlModifier:
+            self.undostack.undo()
+            e.accept()
         else:
             e.ignore()
         super().keyPressEvent(e)
@@ -318,7 +323,7 @@ class MainWindow(QMainWindow):
             return None
 
         with open(path, 'rb') as f:
-            model = NoteModel(pickle.load(f))
+            model = NoteModel(pickle.load(f), self.undostack)
             return model
 
     def set_all_column_width(self, width):
@@ -381,11 +386,13 @@ class MainWindow(QMainWindow):
 
     def insert_all_row(self):
         cur_i = self.view.currentIndex()
-        self.model.insert_all_row(cur_i)
+        cmd = InsertAllRowCommand(cur_i)
+        self.undostack.push(cmd)
 
     def delete_all_row(self):
         cur_i = self.view.currentIndex()
-        self.model.delete_all_row(cur_i)
+        cmd = DeleteAllRowCommand(cur_i)
+        self.undostack.push(cmd)
 
     def set_color(self):
         color = QColorDialog.getColor()
@@ -418,8 +425,67 @@ class MainWindow(QMainWindow):
             for c, t in enumerate(l.split(',')):
                 i = self.model.index(cur_i.row() + r, cur_i.column() + c)
                 self.model.set_data_at(i, t)
-        # self.model.dataChanged(cur_i, self.model.index(r, c))
-        # self.view.reset()
+
+
+class SetDataCommand(QUndoCommand):
+    def __init__(self, index, value):
+        super().__init__('set data')
+
+        self.model = index.model()
+        self.index = index
+        self.new_value = value
+        self.old_value = None
+
+    def redo(self):
+        old_data = self.model.data_at(self.index)
+        if old_data:
+            self.old_value = old_data.content
+        self.model.set_data_at(self.index, self.new_value)
+
+    def undo(self):
+        if self.old_value:
+            self.model.set_data_at(self.index, self.old_value)
+        else:
+            self.model.del_data_at(self.index)
+
+
+class InsertAllRowCommand(QUndoCommand):
+    def __init__(self, index):
+        super().__init__('insert all row')
+
+        self.index = index
+
+    def redo(self):
+        self.index.model().insert_all_row(self.index)
+
+    def undo(self):
+        self.index.model().delete_all_row(self.index)
+
+
+class DeleteAllRowCommand(QUndoCommand):
+    def __init__(self, index):
+        super().__init__('delete all row')
+
+        self.index = index
+        self.deleted_data = []
+
+    def redo(self):
+        r = self.index.row()
+        model = self.index.model()
+        for c in range(model.columnCount()):
+            data = model.data_at(model.index(r, c))
+            if data:
+                self.deleted_data.append(data)
+
+        self.index.model().delete_all_row(self.index)
+
+    def undo(self):
+        self.index.model().insert_all_row(self.index)
+
+        model = self.index.model()
+        for e in self.deleted_data:
+            model.set_data_at(model.index(e.r, e.c), e.content)
+        self.deleted_data.clear()
 
 
 def catch_exceptions(self, t, val, tb):
