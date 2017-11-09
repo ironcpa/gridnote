@@ -110,7 +110,6 @@ class NoteModel(QAbstractTableModel):
                     return False
             cmd = SetDataCommand(index, value)
             self.undostack.push(cmd)
-            # self.set_data_at(index, value)
             self.dataChanged.emit(index, index)
             return True
         return False
@@ -418,8 +417,6 @@ class MainWindow(QMainWindow):
 
     def paste_from_clipboard(self):
         text = QApplication.clipboard().text()
-        print(text)
-        print('>>>>>>')
         cur_i = self.view.currentIndex()
         for r, l in enumerate(text.splitlines()):
             for c, t in enumerate(l.split(',')):
