@@ -5,6 +5,32 @@ from PyQt5 import uic, QtGui
 from PyQt5.QtCore import *
 
 
+class LabeledLineEdit(QWidget):
+    edit_finished = pyqtSignal(str)
+
+    def __init__(self, label_text = '', edit_text = ''):
+        super().__init__()
+        self.init_ui()
+
+        self.label.setText(label_text)
+        self.lineedit.setText(str(edit_text))
+
+        self.lineedit.editingFinished.connect(lambda: self.edit_finished.emit(self.lineedit.text()))
+
+    def init_ui(self):
+        settingLayout = QHBoxLayout()
+
+        self.label = QLabel('cell width')
+        self.lineedit = QLineEdit()
+        settingLayout.addWidget(self.label)
+        settingLayout.addWidget(self.lineedit)
+
+        self.setLayout(settingLayout)
+
+    def text(self):
+        return self.lineedit.text()
+
+
 class FileChooser(QWidget):
     def __init__(self):
         super().__init__()

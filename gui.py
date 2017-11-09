@@ -30,6 +30,14 @@ class NoteData:
         self.bgcolor = bgcolor
 
 
+class StyleData:
+    def __init__(self, from_index, to_index, bgcolor = None, fgcolor = None ):
+        self.from_index = from_index
+        self.to_index = to_index
+        self.bgcolor = bgcolor
+        self.fgcolor = fgcolor
+
+
 class NoteModel(QAbstractTableModel):
     def __init__(self, src_data):
         super().__init__()
@@ -108,6 +116,17 @@ class NoteModel(QAbstractTableModel):
 
         self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount(), self.columnCount()))
 
+    def delete_all_row(self, from_index, rows = 1):
+        for e in self.src_data:
+            if e.r == from_index.row():
+                self.src_data.remove(e)
+
+        for e in self.src_data:
+            if e.r > from_index.row():
+                e.r -= rows
+
+        self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount(), self.columnCount()))
+
 
 class NoteEditDelegate(QStyledItemDelegate):
     def __init__(self, model):
@@ -128,14 +147,15 @@ class NoteEditDelegate(QStyledItemDelegate):
 
             if option.state & QStyle.State_Selected:
                 painter.fillRect(option.rect, option.palette.highlight())
+                print('{}:{}, draw selected'.format(index.row(), index.column()))
 
-            clip_rect = self.clip_rect_on_row(option.rect, index)
-            if clip_rect:
-                painter.setClipRect(clip_rect)
+            avail_rect = self.clip_rect_on_row(option.rect, index)
+            # if avail_rect:
+            #     painter.setClipRect(avail_rect)
             # fm = QtGui.QFontMetrics(option.font)
             # fh = fm.height() + fm.descent()
             # painter.drawText(option.rect.x(), option.rect.y() + fh, index.data())
-            painter.drawText(clip_rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
+            painter.drawText(avail_rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
         else:
             QStyledItemDelegate.paint(self, painter, option, index)
 
@@ -216,14 +236,18 @@ class MainWindow(QMainWindow):
 
         self.view.setModel(self.model)
         item_delegate = NoteEditDelegate(self.model)
-        # item_delegate.setClipping(False)
         self.view.setItemDelegate(item_delegate)
         self.view.setModel(self.model)
 
         self.view.setShowGrid(False)
         for c in range(self.model.columnCount()):
-            self.view.setColumnWidth(c, 50)
-            self.view.setRowHeight(c, 30)
+            self.view.setColumnWidth(c, int(self.txt_cell_width.text()))
+            self.view.setRowHeight(c, int(self.txt_cell_height.text()))
+        self.set_all_font_size(self.txt_cell_font_size.text())
+
+        self.txt_cell_width.edit_finished.connect(self.set_all_column_width)
+        self.txt_cell_height.edit_finished.connect(self.set_all_row_height)
+        self.txt_cell_font_size.edit_finished.connect(self.set_all_font_size)
 
         self.btn_open.clicked.connect(self.open)
         self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
@@ -237,23 +261,32 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(QWidget())
         self.centralWidget().setLayout(gridlayout)
 
+        settingLayout = QHBoxLayout()
+        self.txt_cell_width = LabeledLineEdit('cell width', co.load_settings('col_width', 50))
+        self.txt_cell_height = LabeledLineEdit('cell height', co.load_settings('row_height', 30))
+        self.txt_cell_font_size = LabeledLineEdit('font size', co.load_settings('cell_font_size', 12))
+        settingLayout.addWidget(self.txt_cell_width)
+        settingLayout.addWidget(self.txt_cell_height)
+        settingLayout.addWidget(self.txt_cell_font_size)
+
         buttonlayout = QHBoxLayout()
         self.txt_path = QLineEdit()
         self.btn_open = QPushButton('open')
         self.btn_save = QPushButton('save')
         self.btn_save_as = QPushButton('save as')
         self.btn_bg_color = QPushButton('b-color')
-        buttonlayout.addWidget((self.txt_path))
+        buttonlayout.addWidget(self.txt_path)
         buttonlayout.addWidget(self.btn_open)
         buttonlayout.addWidget(self.btn_save)
         buttonlayout.addWidget(self.btn_save_as)
         buttonlayout.addWidget(self.btn_bg_color)
 
-        gridlayout.addLayout(buttonlayout, 0, 0)
+        gridlayout.addLayout(settingLayout, 0, 0)
+        gridlayout.addLayout(buttonlayout, 1, 0)
 
         # self.view = QTableView()
         self.view = NoteView()
-        gridlayout.addWidget(self.view, 1, 0)
+        gridlayout.addWidget(self.view, 2, 0)
 
     def keyPressEvent(self, e: QtGui.QKeyEvent):
         key = e.key()
@@ -266,6 +299,9 @@ class MainWindow(QMainWindow):
             e.accept()
         elif key == Qt.Key_I and mod == Qt.ControlModifier:
             self.insert_all_row()
+            e.accept()
+        elif key == Qt.Key_K and mod == Qt.ControlModifier:
+            self.delete_all_row()
             e.accept()
         else:
             e.ignore()
@@ -281,6 +317,26 @@ class MainWindow(QMainWindow):
         with open(path, 'rb') as f:
             model = NoteModel(pickle.load(f))
             return model
+
+    def set_all_column_width(self, width):
+        w = int(width) if width.isdigit() else 0
+        if w > 0 and w <= 100:
+            for c in range(self.model.columnCount()):
+                self.view.setColumnWidth(c, w)
+
+    def set_all_row_height(self, height):
+        h = int(height) if height.isdigit() else 0
+        if h > 0 and h <= 100:
+            for r in range(self.model.rowCount()):
+                self.view.setRowHeight(r, h)
+
+    def set_all_font_size(self, font_size):
+        fs = int(font_size) if font_size.isdigit() else 0
+
+        if fs > 0:
+            view_font = QtGui.QFont()
+            view_font.setPointSize(fs)
+            self.view.setFont(view_font)
 
     def open(self, path = None):
         if not path:
@@ -308,6 +364,13 @@ class MainWindow(QMainWindow):
         if is_new_save:
             self.open(path)
 
+        self.save_settings()
+
+    def save_settings(self):
+        co.save_settings('col_width', int(self.txt_cell_width.text()))
+        co.save_settings('row_height', int(self.txt_cell_height.text()))
+        co.save_settings('cell_font_size', int(self.txt_cell_font_size.text()))
+
     def delete_selected(self):
         indexes = self.view.selectionModel().selectedIndexes()
         for i in indexes:
@@ -316,6 +379,10 @@ class MainWindow(QMainWindow):
     def insert_all_row(self):
         cur_i = self.view.currentIndex()
         self.model.insert_all_row(cur_i)
+
+    def delete_all_row(self):
+        cur_i = self.view.currentIndex()
+        self.model.delete_all_row(cur_i)
 
     def set_color(self):
         color = QColorDialog.getColor()

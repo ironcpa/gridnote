@@ -4,9 +4,13 @@ company = 'hjchoi'
 app_name = 'gridnote'
 
 
-def load_settings(key):
+def load_settings(key, default_val = None):
     settings = QSettings(company, app_name)
-    return settings.value(app_name + '_' + key)
+    val = settings.value(app_name + '_' + key)
+    if val:
+        return val
+    else:
+        return default_val
 
 
 def save_settings(key, value):
