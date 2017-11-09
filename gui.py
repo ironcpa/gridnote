@@ -24,18 +24,30 @@ default_data = [[str(x), str(y)] for x in range(50000)
                 for y in range(20)]
 
 
-class NoteData:
-    def __init__(self, r = 0, c = 0, content = '', bgcolor = None):
+class Data:
+    def __init__(self, r = 0, c = 0):
         self.r = r
         self.c = c
+
+    def is_data(self):
+        return False
+
+    def is_at(self, index):
+        return self.r == index.row() and self.c == index.column()
+
+
+class NoteData(Data):
+    def __init__(self, r = 0, c = 0, content = ''):
+        super().__init__(r, c)
         self.content = content
-        self.bgcolor = bgcolor
+
+    def is_data(self):
+        return True
 
 
-class StyleData:
-    def __init__(self, from_index, to_index, bgcolor = None, fgcolor = None ):
-        self.from_index = from_index
-        self.to_index = to_index
+class StyleData(Data):
+    def __init__(self, r = 0, c = 0, bgcolor = None, fgcolor = None):
+        super().__init__(r, c)
         self.bgcolor = bgcolor
         self.fgcolor = fgcolor
 
@@ -53,7 +65,12 @@ class NoteModel(QAbstractTableModel):
 
     def data_at(self, index):
         for e in self.src_data:
-            if e.r == index.row() and e.c == index.column():
+            if e.is_data() and e.is_at(index):
+                return e
+
+    def style_at(self, index):
+        for e in self.src_data:
+            if not e.is_data() and e.is_at(index):
                 return e
 
     def set_data_at(self, index, value):
@@ -64,15 +81,34 @@ class NoteModel(QAbstractTableModel):
             self.src_data.append(NoteData(index.row(), index.column(), value))
         self.dataChanged.emit(index, index)
 
+    def set_style_at(self, index, bgcolor = None, fgcolor = None):
+        style = self.style_at(index)
+        if style:
+            style.bgcolor = bgcolor
+            style.fgcolor = fgcolor
+        else:
+            self.src_data.append(StyleData(index.row(), index.column(), bgcolor, fgcolor))
+        self.dataChanged.emit(index, index)
+
     def del_data_at(self, index):
         for i, e in enumerate(self.src_data):
-            if e.r == index.row() and e.c == index.column():
+            if e.is_data() and e.is_at(index):
+                del self.src_data[i]
+                self.dataChanged.emit(index, index)
+                return
+
+    def del_style_at(self, index):
+        for i, e in enumerate(self.src_data):
+            if not e.is_data() and e.is_at(index):
                 del self.src_data[i]
                 self.dataChanged.emit(index, index)
                 return
 
     def has_data_at(self, index):
         return self.data_at(index) is not None
+
+    def has_style_at(self, index):
+        return self.style_at(index) is not None
 
     def rowCount(self, parent: QModelIndex = ...):
         return self.max_row
@@ -85,14 +121,14 @@ class NoteModel(QAbstractTableModel):
             return QVariant()
 
         data = self.data_at(index)
-        if not data:
-            return QVariant()
+        style = self.style_at(index)
 
         if role == Qt.DisplayRole:
-            return QVariant(data.content)
+            if data:
+                return QVariant(data.content)
         elif role == Qt.BackgroundRole:
-            if data.bgcolor:
-                return QVariant(QtGui.QBrush(data.bgcolor))
+            if style and style.bgcolor:
+                return QVariant(QtGui.QBrush(style.bgcolor))
 
         return QVariant()
 
@@ -250,7 +286,7 @@ class MainWindow(QMainWindow):
         self.btn_open.clicked.connect(self.open)
         self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
         self.btn_save_as.clicked.connect(lambda state: self.save())
-        self.btn_bg_color.clicked.connect(self.set_color)
+        self.btn_bg_color.clicked.connect(self.set_bgcolor)
 
     def setup_ui(self, dummy):
         self.setGeometry(100, 100, 800, 600)
@@ -393,11 +429,16 @@ class MainWindow(QMainWindow):
         cmd = DeleteAllRowCommand(cur_i)
         self.undostack.push(cmd)
 
-    def set_color(self):
+    def set_bgcolor(self):
         color = QColorDialog.getColor()
         cur_i = self.view.currentIndex()
-        self.model.data_at(cur_i).bgcolor = color
+        # self.model.data_at(cur_i).bgcolor = color
+        self.model.set_style_at(cur_i, color)
         self.view.update(cur_i)
+
+        for i in self.view.selectedIndexes():
+            self.model.set_style_at(i, color)
+            self.view.update(cur_i)
 
     def copy_to_clipboard(self):
         selections = self.view.selectedIndexes()
