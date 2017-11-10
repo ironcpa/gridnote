@@ -216,17 +216,8 @@ class NoteEditDelegate(QStyledItemDelegate):
                 painter.fillRect(option.rect, option.palette.highlight())
 
             avail_rect = self.clip_rect_on_row(option.rect, index)
-            # if avail_rect:
-            #     painter.setClipRect(avail_rect)
-            # fm = QtGui.QFontMetrics(option.font)
-            # fh = fm.height() + fm.descent()
-            # painter.drawText(option.rect.x(), option.rect.y() + fh, index.data())
             if avail_rect:
-                # print('({}:{}) = {}, repainted'.format(index.row(), index.column(), index.data()))
-                # painter.fillRect(avail_rect, Qt.yellow)
                 painter.drawText(avail_rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
-
-            # painter.drawText(option.rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
         else:
             QStyledItemDelegate.paint(self, painter, option, index)
 
@@ -234,7 +225,6 @@ class NoteEditDelegate(QStyledItemDelegate):
         model = cur_index.model()
         r = cur_index.row()
         col_w = 50
-        cal_counter = 0
         col_cushion = 2
         # max_col = model.columnCount()
         max_col = self.view.visible_max_col() + col_cushion
@@ -243,13 +233,10 @@ class NoteEditDelegate(QStyledItemDelegate):
             return None
 
         for c in range(cur_index.column() + 1, max_col):
-            cal_counter += 1
             i = model.index(r, c)
             if i.isValid() and i.data():
                 return QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() + (c - cur_index.column() - 1) * col_w,
                         cur_rect.height())
-        cal_counter += 1
-        # print('{}, calc clip rect : cur_col={}, max_col={}, calc={}'.format(strftime('%Y%m%d-%H%M%S', localtime()), cur_index.column(), max_col, cal_counter))
         return QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() * (max_col - cur_index.column() - 1), cur_rect.height())
 
 
@@ -261,7 +248,6 @@ class NoteView(QTableView):
         key = e.key()
         mods = QApplication.keyboardModifiers()
         if key == Qt.Key_Return:
-            # self.enter_edit_mode()
             if mods == Qt.ControlModifier:
                 self.enter_edit_mode()
             elif mods == Qt.ShiftModifier:
@@ -365,7 +351,6 @@ class MainWindow(QMainWindow):
         gridlayout.addLayout(settingLayout, 0, 0)
         gridlayout.addLayout(buttonlayout, 1, 0)
 
-        # self.view = QTableView()
         self.view = NoteView()
         gridlayout.addWidget(self.view, 2, 0)
 
