@@ -6,6 +6,7 @@ import typing
 import pickle
 import io
 import csv
+from time import gmtime, strftime, localtime
 from PyQt5.QtWidgets import *
 from PyQt5 import uic, QtGui
 from PyQt5.QtCore import *
@@ -68,27 +69,54 @@ class NoteModel(QAbstractTableModel):
             if e.is_data() and e.is_at(index):
                 return e
 
+    def data_at2(self, r, c):
+        for e in self.src_data:
+            if e.r == r and e.c == c:
+                return e
+
     def style_at(self, index):
         for e in self.src_data:
             if not e.is_data() and e.is_at(index):
                 return e
 
-    def set_data_at(self, index, value):
+    def set_data_at(self, index, content):
         data = self.data_at(index)
+        is_mod = False
         if data:
-            data.content = value
+            if content == '':
+                self.del_data_at(index)
+            else:
+                data.content = content
+            is_mod = True
         else:
-            self.src_data.append(NoteData(index.row(), index.column(), value))
-        self.dataChanged.emit(index, index)
+            if content == '':
+                pass
+            else:
+                self.src_data.append(NoteData(index.row(), index.column(), content))
+                is_mod = True
+
+        if is_mod:
+            self.dataChanged.emit(index, index)
 
     def set_style_at(self, index, bgcolor = None, fgcolor = None):
         style = self.style_at(index)
+        is_mod = False
         if style:
-            style.bgcolor = bgcolor
-            style.fgcolor = fgcolor
+            if bgcolor is None and fgcolor is None:
+               self.del_style_at(index)
+            else:
+                style.bgcolor = bgcolor
+                style.fgcolor = fgcolor
+            is_mod = True
         else:
-            self.src_data.append(StyleData(index.row(), index.column(), bgcolor, fgcolor))
-        self.dataChanged.emit(index, index)
+            if bgcolor is None and fgcolor is None:
+                pass
+            else:
+                self.src_data.append(StyleData(index.row(), index.column(), bgcolor, fgcolor))
+                is_mod = True
+
+        if is_mod:
+            self.dataChanged.emit(index, index)
 
     def del_data_at(self, index):
         for i, e in enumerate(self.src_data):
@@ -168,8 +196,9 @@ class NoteModel(QAbstractTableModel):
 
 
 class NoteEditDelegate(QStyledItemDelegate):
-    def __init__(self):
+    def __init__(self, view):
         super().__init__()
+        self.view = view
 
     def createEditor(self, parent: QWidget, option: 'QStyleOptionViewItem', index: QModelIndex):
         return super(NoteEditDelegate, self).createEditor(parent, option, index)
@@ -192,7 +221,12 @@ class NoteEditDelegate(QStyledItemDelegate):
             # fm = QtGui.QFontMetrics(option.font)
             # fh = fm.height() + fm.descent()
             # painter.drawText(option.rect.x(), option.rect.y() + fh, index.data())
-            painter.drawText(avail_rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
+            if avail_rect:
+                # print('({}:{}) = {}, repainted'.format(index.row(), index.column(), index.data()))
+                # painter.fillRect(avail_rect, Qt.yellow)
+                painter.drawText(avail_rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
+
+            # painter.drawText(option.rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
         else:
             QStyledItemDelegate.paint(self, painter, option, index)
 
@@ -200,14 +234,23 @@ class NoteEditDelegate(QStyledItemDelegate):
         model = cur_index.model()
         r = cur_index.row()
         col_w = 50
-        for c in range(cur_index.column() + 1, model.columnCount()):
+        cal_counter = 0
+        col_cushion = 2
+        # max_col = model.columnCount()
+        max_col = self.view.visible_max_col() + col_cushion
+
+        if cur_index.column() > max_col:
+            return None
+
+        for c in range(cur_index.column() + 1, max_col):
+            cal_counter += 1
             i = model.index(r, c)
             if i.isValid() and i.data():
-                rect = QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() + (c - cur_index.column() - 1) * col_w,
+                return QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() + (c - cur_index.column() - 1) * col_w,
                         cur_rect.height())
-                return rect
-        tc = model.columnCount()
-        return QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() * (tc - cur_index.column() - 1), cur_rect.height())
+        cal_counter += 1
+        # print('{}, calc clip rect : cur_col={}, max_col={}, calc={}'.format(strftime('%Y%m%d-%H%M%S', localtime()), cur_index.column(), max_col, cal_counter))
+        return QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() * (max_col - cur_index.column() - 1), cur_rect.height())
 
 
 class NoteView(QTableView):
@@ -250,6 +293,10 @@ class NoteView(QTableView):
             i = self.model().index(base_index.row(), c)
             self.update(i)
 
+    def visible_max_col(self):
+        vrect = self.viewport().contentsRect()
+        return self.indexAt(vrect.bottomRight()).column()
+
 
 default_list_data = [NoteData(0, 0, 'a'),
                      NoteData(0, 1, 'b'),
@@ -270,7 +317,7 @@ class MainWindow(QMainWindow):
         if not self.model:
             self.model = NoteModel(default_list_data)
 
-        self.view.setItemDelegate(NoteEditDelegate())
+        self.view.setItemDelegate(NoteEditDelegate(self.view))
         self.view.setModel(self.model)
 
         self.view.setShowGrid(False)
