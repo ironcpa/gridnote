@@ -224,10 +224,10 @@ class NoteEditDelegate(QStyledItemDelegate):
     def clip_rect_on_row(self, cur_rect, cur_index):
         model = cur_index.model()
         r = cur_index.row()
-        col_w = 50
+        col_w = self.view.cell_w
         col_cushion = 2
-        # max_col = model.columnCount()
-        max_col = self.view.visible_max_col() + col_cushion
+        max_col = model.columnCount()
+        # max_col = self.view.visible_max_col() + col_cushion
 
         if cur_index.column() > max_col:
             return None
@@ -243,6 +243,15 @@ class NoteEditDelegate(QStyledItemDelegate):
 class NoteView(QTableView):
     def __init__(self):
         super().__init__()
+        self.cell_w = 0
+        self.cell_h = 0
+
+    def set_cell_size(self, w, h):
+        self.cell_w = w
+        self.cell_h = h
+        for c in range(self.model().columnCount()):
+            self.setColumnWidth(c, h)
+            self.setRowHeight(c, h)
 
     def keyPressEvent(self, e: QtGui.QKeyEvent):
         key = e.key()
@@ -307,9 +316,7 @@ class MainWindow(QMainWindow):
         self.view.setModel(self.model)
 
         self.view.setShowGrid(False)
-        for c in range(self.model.columnCount()):
-            self.view.setColumnWidth(c, int(self.txt_cell_width.text()))
-            self.view.setRowHeight(c, int(self.txt_cell_height.text()))
+        self.view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
         self.set_all_font_size(self.txt_cell_font_size.text())
 
         self.txt_cell_width.edit_finished.connect(self.set_all_column_width)
