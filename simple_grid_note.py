@@ -47,10 +47,9 @@ class NoteData(Data):
 
 
 class StyleData(Data):
-    def __init__(self, r = 0, c = 0, bgcolor = None, fgcolor = None):
+    def __init__(self, r = 0, c = 0, bgcolor = None):
         super().__init__(r, c)
         self.bgcolor = bgcolor
-        self.fgcolor = fgcolor
 
 
 class NoteModel(QAbstractTableModel):
@@ -218,6 +217,9 @@ class NoteEditDelegate(QStyledItemDelegate):
             fm = QtGui.QFontMetrics(option.font)
             fh = fm.height() - fm.descent()
             painter.drawText(option.rect.x(), option.rect.y() + fh, index.data())
+            fw = fm.boundingRect(index.data()).width()
+            # # sample cancel line
+            # painter.drawLine(QPoint(option.rect.x(), option.rect.y() + 20), QPoint(option.rect.x() + fw, option.rect.y() + 20))
         else:
             QStyledItemDelegate.paint(self, painter, option, index)
 
@@ -281,6 +283,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setup_ui(self)
+        self.init_focus_policy()
 
         self.undostack = QUndoStack()
         self.curr_path = None
@@ -291,6 +294,8 @@ class MainWindow(QMainWindow):
 
         self.view.setItemDelegate(NoteEditDelegate(self.view))
         self.view.setModel(self.model)
+        last_index = self.model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
+        self.view.setCurrentIndex(last_index)
 
         self.view.setShowGrid(False)
         self.view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
@@ -341,6 +346,14 @@ class MainWindow(QMainWindow):
         self.view = NoteView()
         gridlayout.addWidget(self.view, 2, 0)
 
+    def init_focus_policy(self):
+        self.txt_cell_width.setFocusPolicy(Qt.ClickFocus)
+        self.txt_cell_height.setFocusPolicy(Qt.ClickFocus)
+        self.txt_cell_font_size.setFocusPolicy(Qt.ClickFocus)
+        self.txt_path.setFocusPolicy(Qt.NoFocus)
+
+        self.view.setFocus()
+
     def keyPressEvent(self, e: QtGui.QKeyEvent):
         key = e.key()
         mod = QApplication.keyboardModifiers()
@@ -368,6 +381,10 @@ class MainWindow(QMainWindow):
         else:
             e.ignore()
         super().keyPressEvent(e)
+
+    def closeEvent(self, e: QtGui.QCloseEvent):
+        co.save_settings('last_row', self.view.currentIndex().row())
+        co.save_settings('last_col', self.view.currentIndex().column())
 
     def load_model_from_file(self, path):
         if not path:
@@ -426,9 +443,9 @@ class MainWindow(QMainWindow):
         if is_new_save:
             self.open(path)
 
-        self.save_settings()
+        self.save_ui_settings()
 
-    def save_settings(self):
+    def save_ui_settings(self):
         co.save_settings('col_width', int(self.txt_cell_width.text()))
         co.save_settings('row_height', int(self.txt_cell_height.text()))
         co.save_settings('cell_font_size', int(self.txt_cell_font_size.text()))
