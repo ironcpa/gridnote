@@ -292,6 +292,8 @@ class MainWindow(QMainWindow):
         if not self.model:
             self.model = NoteModel(default_list_data)
 
+        self.top_view.setModel(self.model)
+
         self.view.setItemDelegate(NoteEditDelegate(self.view))
         self.view.setModel(self.model)
         last_index = self.model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
@@ -343,8 +345,19 @@ class MainWindow(QMainWindow):
         gridlayout.addLayout(settingLayout, 0, 0)
         gridlayout.addLayout(buttonlayout, 1, 0)
 
+        self.top_view = QTableView()
+        self.top_view.horizontalScrollBar().setVisible(False)
+        self.top_view.verticalScrollBar().setVisible(False)
+        self.top_view.setMaximumHeight(100)
+        gridlayout.addWidget(self.top_view, 2, 0)
+
         self.view = NoteView()
-        gridlayout.addWidget(self.view, 2, 0)
+        gridlayout.addWidget(self.view, 3, 0)
+
+        self.view.horizontalScrollBar().valueChanged.connect(self.sync_hscroll)
+
+    def sync_hscroll(self, value):
+        self.top_view.horizontalScrollBar().setValue(value)
 
     def init_focus_policy(self):
         self.txt_cell_width.setFocusPolicy(Qt.ClickFocus)
