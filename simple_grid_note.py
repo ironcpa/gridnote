@@ -209,38 +209,17 @@ class NoteEditDelegate(QStyledItemDelegate):
 
     def paint(self, painter: QtGui.QPainter, option: 'QStyleOptionViewItem', index: QModelIndex):
         if index.data():
-            # if index.data(Qt.BackgroundRole):
-            #     painter.fillRect(option.rect, index.data(Qt.BackgroundRole))
+            if index.data(Qt.BackgroundRole):
+                painter.fillRect(option.rect, index.data(Qt.BackgroundRole))
 
             if option.state & QStyle.State_Selected:
                 painter.fillRect(option.rect, option.palette.highlight())
 
-            # avail_rect = self.clip_rect_on_row(option.rect, index)
-            # if avail_rect:
-            #     painter.drawText(avail_rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
             fm = QtGui.QFontMetrics(option.font)
-            fh = fm.height() + fm.descent()
+            fh = fm.height() - fm.descent()
             painter.drawText(option.rect.x(), option.rect.y() + fh, index.data())
         else:
             QStyledItemDelegate.paint(self, painter, option, index)
-
-    # def clip_rect_on_row(self, cur_rect, cur_index):
-    #     model = cur_index.model()
-    #     r = cur_index.row()
-    #     col_w = self.view.cell_w
-    #     col_cushion = 2
-    #     max_col = model.columnCount()
-    #     # max_col = self.view.visible_max_col() + col_cushion
-    #
-    #     if cur_index.column() > max_col:
-    #         return None
-    #
-    #     for c in range(cur_index.column() + 1, max_col):
-    #         i = model.index(r, c)
-    #         if i.isValid() and i.data():
-    #             return QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() + (c - cur_index.column() - 1) * col_w,
-    #                     cur_rect.height())
-    #     return QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() * (max_col - cur_index.column() - 1), cur_rect.height())
 
 
 class NoteView(QTableView):
@@ -253,7 +232,7 @@ class NoteView(QTableView):
         self.cell_w = w
         self.cell_h = h
         for c in range(self.model().columnCount()):
-            self.setColumnWidth(c, h)
+            self.setColumnWidth(c, w)
             self.setRowHeight(c, h)
 
     def keyPressEvent(self, e: QtGui.QKeyEvent):
@@ -271,9 +250,13 @@ class NoteView(QTableView):
             e.ignore()
         super(NoteView, self).keyPressEvent(e)
 
-    # def currentChanged(self, current: QModelIndex, previous: QModelIndex):
-    #     self.update_clipable_cells(previous)
-    #     super(NoteView, self).currentChanged(current, previous)
+    def currentChanged(self, current: QModelIndex, previous: QModelIndex):
+        r = previous.row()
+        for c in range(100):
+            i = self.model().index(r, c)
+            if self.model().data(i):
+                self.update(i)
+        super().currentChanged(current, previous)
 
     def enter_edit_mode(self):
         self.edit(self.currentIndex())
@@ -285,16 +268,6 @@ class NoteView(QTableView):
     def move_to_next_row(self):
         cur = self.currentIndex()
         self.setCurrentIndex(self.model().index(cur.row() + 1, cur.column()))
-
-    # def update_clipable_cells(self, base_index):
-    #     # for c in range(base_index.column() + 1):
-    #     #     i = self.model().index(base_index.row(), c)
-    #     #     self.update(i)
-    #     self.update(base_index)
-
-    def visible_max_col(self):
-        vrect = self.viewport().contentsRect()
-        return self.indexAt(vrect.bottomRight()).column()
 
 
 default_list_data = [NoteData(0, 0, 'a'),
@@ -331,6 +304,7 @@ class MainWindow(QMainWindow):
         self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
         self.btn_save_as.clicked.connect(lambda state: self.save())
         self.btn_bg_color.clicked.connect(self.set_bgcolor)
+        self.btn_clear_bg_color.clicked.connect(self.clear_bgcolor)
 
     def setup_ui(self, dummy):
         self.setGeometry(100, 100, 800, 600)
@@ -353,11 +327,13 @@ class MainWindow(QMainWindow):
         self.btn_save = QPushButton('save')
         self.btn_save_as = QPushButton('save as')
         self.btn_bg_color = QPushButton('b-color')
+        self.btn_clear_bg_color = QPushButton('clear b-color')
         buttonlayout.addWidget(self.txt_path)
         buttonlayout.addWidget(self.btn_open)
         buttonlayout.addWidget(self.btn_save)
         buttonlayout.addWidget(self.btn_save_as)
         buttonlayout.addWidget(self.btn_bg_color)
+        buttonlayout.addWidget(self.btn_clear_bg_color)
 
         gridlayout.addLayout(settingLayout, 0, 0)
         gridlayout.addLayout(buttonlayout, 1, 0)
@@ -475,13 +451,17 @@ class MainWindow(QMainWindow):
     def set_bgcolor(self):
         color = QColorDialog.getColor()
         cur_i = self.view.currentIndex()
-        # self.model.data_at(cur_i).bgcolor = color
         self.model.set_style_at(cur_i, color)
         self.view.update(cur_i)
 
         for i in self.view.selectedIndexes():
             self.model.set_style_at(i, color)
-            self.view.update(cur_i)
+            self.view.update(i)
+
+    def clear_bgcolor(self):
+        for i in self.view.selectedIndexes():
+            self.model.del_style_at(i)
+            self.view.update(i)
 
     def copy_to_clipboard(self):
         selections = self.view.selectedIndexes()

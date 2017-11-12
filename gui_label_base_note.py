@@ -213,14 +213,7 @@ class NoteEditDelegate(QStyledItemDelegate):
 
             if option.state & QStyle.State_Selected:
                 painter.fillRect(option.rect, option.palette.highlight())
-
-            if not self.parent().indexWidget(index):
-                lbl = CellWidget(index.data())
-                lbl.setFixedWidth(self.avail_width_on_row(option.rect, index))
-                self.parent().setIndexWidget(index, lbl)
         else:
-            if self.parent().indexWidget(index):
-                self.parent().indexWidget(index).close()
             QStyledItemDelegate.paint(self, painter, option, index)
 
     def avail_width_on_row(self, cur_rect, cur_index):
@@ -239,13 +232,17 @@ class NoteEditDelegate(QStyledItemDelegate):
         return cur_rect.width() * (max_col - cur_index.column() - 1)
 
 
-class CellWidget(QLabel):
-    def __init__(self, text):
-        super().__init__(text)
+class CellWidget(QWidget):
+    def __init__(self, text, x, y, w, h):
+        super().__init__()
+        self.text = text
+        self.setGeometry(x, y, w, h)
 
-    def keyPressEvent(self, e: QtGui.QKeyEvent):
-        key = e.key
-        e.ignore()
+    def paintEvent(self, e: QtGui.QPaintEvent):
+        painter = QtGui.QPainter()
+        painter.begin(self)
+        painter.drawText(0, 0, self.text)
+        painter.end()
 
 
 class NoteView(QTableView):
