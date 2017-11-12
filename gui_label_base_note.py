@@ -196,9 +196,8 @@ class NoteModel(QAbstractTableModel):
 
 
 class NoteEditDelegate(QStyledItemDelegate):
-    def __init__(self, view):
-        super().__init__()
-        self.view = view
+    def __init__(self, parent):
+        super().__init__(parent)
 
     def createEditor(self, parent: QWidget, option: 'QStyleOptionViewItem', index: QModelIndex):
         return super(NoteEditDelegate, self).createEditor(parent, option, index)
@@ -214,20 +213,21 @@ class NoteEditDelegate(QStyledItemDelegate):
 
             if option.state & QStyle.State_Selected:
                 painter.fillRect(option.rect, option.palette.highlight())
-            #
-            # avail_rect = self.clip_rect_on_row(option.rect, index)
-            # if avail_rect:
-            #     painter.drawText(avail_rect, Qt.AlignLeft | Qt.AlignVCenter, index.data())
+
+            if not self.parent().indexWidget(index):
+                lbl = CellWidget(index.data())
+                lbl.setFixedWidth(self.avail_width_on_row(option.rect, index))
+                self.parent().setIndexWidget(index, lbl)
         else:
+            if self.parent().indexWidget(index):
+                self.parent().indexWidget(index).close()
             QStyledItemDelegate.paint(self, painter, option, index)
 
-    def clip_rect_on_row(self, cur_rect, cur_index):
+    def avail_width_on_row(self, cur_rect, cur_index):
         model = cur_index.model()
         r = cur_index.row()
         col_w = 50
-        col_cushion = 2
-        # max_col = model.columnCount()
-        max_col = self.view.visible_max_col() + col_cushion
+        max_col = model.columnCount()
 
         if cur_index.column() > max_col:
             return None
@@ -235,14 +235,13 @@ class NoteEditDelegate(QStyledItemDelegate):
         for c in range(cur_index.column() + 1, max_col):
             i = model.index(r, c)
             if i.isValid() and i.data():
-                return QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() + (c - cur_index.column() - 1) * col_w,
-                        cur_rect.height())
-        return QRect(cur_rect.x(), cur_rect.y(), cur_rect.width() * (max_col - cur_index.column() - 1), cur_rect.height())
+                return cur_rect.width() + (c - cur_index.column() - 1) * col_w
+        return cur_rect.width() * (max_col - cur_index.column() - 1)
 
 
 class CellWidget(QLabel):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, text):
+        super().__init__(text)
 
     def keyPressEvent(self, e: QtGui.QKeyEvent):
         key = e.key
@@ -252,25 +251,6 @@ class CellWidget(QLabel):
 class NoteView(QTableView):
     def __init__(self):
         super().__init__()
-        self.cell_size = QSize(50, 50)
-
-    def setModel(self, model: QAbstractItemModel):
-        super(NoteView, self).setModel(model)
-        self.init_labels()
-
-    def init_labels(self):
-        for r in range(self.model().rowCount()):
-            for c in range(self.model().columnCount()):
-                lbl = CellWidget()
-                lbl.setFocusPolicy(Qt.NoFocus)
-                self.setIndexWidget(self.model().index(r, c), lbl)
-
-    def set_cell_size(self, size):
-        self.cell_size = size
-        for c in range(self.model().columnCount()):
-            self.setColumnWidth(c, size.width())
-            self.setRowHeight(c, size.height())
-        self.layout_label_all()
 
     def keyPressEvent(self, e: QtGui.QKeyEvent):
         key = e.key()
@@ -287,42 +267,6 @@ class NoteView(QTableView):
             e.ignore()
         super(NoteView, self).keyPressEvent(e)
 
-    def dataChanged(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles: typing.Iterable[int] = ...):
-        # label = self.indexWidget(topLeft)
-        # data = topLeft.data()
-        # if data:
-        #     label.setText(data)
-        #     print('label width on ({}:{})={}'.format(topLeft.row(), topLeft.column(), self.label_width(topLeft)))
-        #     label.setFixedWidth(self.label_width(topLeft))
-        self.layout_label(topLeft)
-
-    def currentChanged(self, current: QModelIndex, previous: QModelIndex):
-        self.update_clipable_cells(previous)
-        super(NoteView, self).currentChanged(current, previous)
-
-    def layout_label(self, index):
-        label = self.indexWidget(index)
-        data = index.data()
-        if data:
-            label.setText(data)
-            # print('label width on ({}:{})={}'.format(index.row(), index.column(), self.label_width(index)))
-            label.setFixedWidth(self.label_width(index))
-
-    def label_width(self, cur_index):
-        model = cur_index.model()
-        r = cur_index.row()
-        col_w = self.cell_size.width()
-        max_col = model.columnCount()
-        # max_col = self.visible_max_col()
-
-        for c in range(cur_index.column() + 1, max_col):
-            i = model.index(r, c)
-            if i.isValid() and i.data():
-                # print('has r data : {} + ({} - {} - 1) * {} at {}'.format(col_w, c, cur_index.column(), col_w, lbl.text()))
-                return col_w + (c - cur_index.column() - 1) * col_w
-        # print('no r data : ({} - {} - 1) * {} at {}'.format(max_col, cur_index.column(), col_w, lbl.text()))
-        return (max_col - cur_index.column() - 1) * col_w
-
     def enter_edit_mode(self):
         self.edit(self.currentIndex())
 
@@ -333,20 +277,6 @@ class NoteView(QTableView):
     def move_to_next_row(self):
         cur = self.currentIndex()
         self.setCurrentIndex(self.model().index(cur.row() + 1, cur.column()))
-
-    def update_clipable_cells(self, base_index):
-        for c in range(base_index.column() + 1):
-            i = self.model().index(base_index.row(), c)
-            self.update(i)
-
-    def layout_label_all(self):
-        for r in range(self.model().rowCount()):
-            for c in range(self.model().columnCount()):
-                self.layout_label(self.model().index(r, c))
-
-    def visible_max_col(self):
-        vrect = self.viewport().contentsRect()
-        return self.indexAt(vrect.bottomRight()).column()
 
 
 default_list_data = [NoteData(0, 0, 'a'),
@@ -372,7 +302,6 @@ class MainWindow(QMainWindow):
         self.view.setModel(self.model)
 
         self.view.setShowGrid(False)
-        self.view.set_cell_size(QSize(int(self.txt_cell_width.text()), int(self.txt_cell_height.text())))
         self.set_all_font_size(self.txt_cell_font_size.text())
 
         self.txt_cell_width.edit_finished.connect(self.set_all_column_width)
@@ -383,6 +312,7 @@ class MainWindow(QMainWindow):
         self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
         self.btn_save_as.clicked.connect(lambda state: self.save())
         self.btn_bg_color.clicked.connect(self.set_bgcolor)
+        self.btn_test.clicked.connect(self.do_test_action)
 
     def setup_ui(self, dummy):
         self.setGeometry(100, 100, 800, 600)
@@ -405,11 +335,13 @@ class MainWindow(QMainWindow):
         self.btn_save = QPushButton('save')
         self.btn_save_as = QPushButton('save as')
         self.btn_bg_color = QPushButton('b-color')
+        self.btn_test = QPushButton('test')
         buttonlayout.addWidget(self.txt_path)
         buttonlayout.addWidget(self.btn_open)
         buttonlayout.addWidget(self.btn_save)
         buttonlayout.addWidget(self.btn_save_as)
         buttonlayout.addWidget(self.btn_bg_color)
+        buttonlayout.addWidget(self.btn_test)
 
         gridlayout.addLayout(settingLayout, 0, 0)
         gridlayout.addLayout(buttonlayout, 1, 0)
@@ -534,6 +466,14 @@ class MainWindow(QMainWindow):
         for i in self.view.selectedIndexes():
             self.model.set_style_at(i, color)
             self.view.update(cur_i)
+
+    def do_test_action(self):
+        widget_counter = 0
+        for r in range(self.model.rowCount()):
+            for c in range(self.model.columnCount()):
+                widget = self.view.indexWidget(self.model.index(r, c))
+                widget_counter += 1 if widget is not None else 0
+        print('widget counter = {}'.format(widget_counter))
 
     def copy_to_clipboard(self):
         selections = self.view.selectedIndexes()
