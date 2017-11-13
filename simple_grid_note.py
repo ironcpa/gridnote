@@ -195,9 +195,8 @@ class NoteModel(QAbstractTableModel):
 
 
 class NoteEditDelegate(QStyledItemDelegate):
-    def __init__(self, view):
+    def __init__(self):
         super().__init__()
-        self.view = view
 
     def createEditor(self, parent: QWidget, option: 'QStyleOptionViewItem', index: QModelIndex):
         return super(NoteEditDelegate, self).createEditor(parent, option, index)
@@ -227,12 +226,8 @@ class NoteEditDelegate(QStyledItemDelegate):
 class NoteView(QTableView):
     def __init__(self):
         super().__init__()
-        self.cell_w = 0
-        self.cell_h = 0
 
     def set_cell_size(self, w, h):
-        self.cell_w = w
-        self.cell_h = h
         for c in range(self.model().columnCount()):
             self.setColumnWidth(c, w)
             self.setRowHeight(c, h)
@@ -248,6 +243,14 @@ class NoteView(QTableView):
             else:
                 self.move_to_next_row()
             e.accept()
+        elif key == Qt.Key_Up and mods == Qt.ControlModifier:
+            pass
+        elif key == Qt.Key_Down and mods == Qt.ControlModifier:
+            pass
+        elif key == Qt.Key_Left and mods == Qt.ControlModifier:
+            pass
+        elif key == Qt.Key_Right and mods == Qt.ControlModifier:
+            pass
         else:
             e.ignore()
         super(NoteView, self).keyPressEvent(e)
@@ -259,6 +262,14 @@ class NoteView(QTableView):
             if self.model().data(i):
                 self.update(i)
         super().currentChanged(current, previous)
+
+    def set_cell_font_size(self, font_size):
+        fs = int(font_size) if font_size.isdigit() else 0
+
+        if fs > 0:
+            view_font = QtGui.QFont()
+            view_font.setPointSize(fs)
+            self.setFont(view_font)
 
     def enter_edit_mode(self):
         self.edit(self.currentIndex())
@@ -292,20 +303,26 @@ class MainWindow(QMainWindow):
         if not self.model:
             self.model = NoteModel(default_list_data)
 
-        self.top_view.setModel(self.model)
+        item_delegate = NoteEditDelegate()
 
-        self.view.setItemDelegate(NoteEditDelegate(self.view))
+        self.top_view.setItemDelegate(item_delegate)
+        self.top_view.setModel(self.model)
+        self.top_view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
+        self.top_view.set_cell_font_size(self.txt_cell_font_size.text())
+        # self.top_view.setShowGrid(False)
+
+        self.view.setItemDelegate(item_delegate)
         self.view.setModel(self.model)
         last_index = self.model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
         self.view.setCurrentIndex(last_index)
 
         self.view.setShowGrid(False)
         self.view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
-        self.set_all_font_size(self.txt_cell_font_size.text())
+        self.view.set_cell_font_size(self.txt_cell_font_size.text())
 
         self.txt_cell_width.edit_finished.connect(self.set_all_column_width)
         self.txt_cell_height.edit_finished.connect(self.set_all_row_height)
-        self.txt_cell_font_size.edit_finished.connect(self.set_all_font_size)
+        self.txt_cell_font_size.edit_finished.connect(self.view.set_cell_font_size)
 
         self.btn_open.clicked.connect(self.open)
         self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
@@ -345,13 +362,17 @@ class MainWindow(QMainWindow):
         gridlayout.addLayout(settingLayout, 0, 0)
         gridlayout.addLayout(buttonlayout, 1, 0)
 
-        self.top_view = QTableView()
+        self.top_view = NoteView()
         self.top_view.horizontalScrollBar().setVisible(False)
         self.top_view.verticalScrollBar().setVisible(False)
+        self.top_view.verticalHeader().setVisible(False)
         self.top_view.setMaximumHeight(100)
+        # self.top_view.setStyleSheet('QTableView:item {background: yellow}')
         gridlayout.addWidget(self.top_view, 2, 0)
 
         self.view = NoteView()
+        self.view.horizontalHeader().setVisible(False)
+        self.view.verticalHeader().setVisible(False)
         gridlayout.addWidget(self.view, 3, 0)
 
         self.view.horizontalScrollBar().valueChanged.connect(self.sync_hscroll)
@@ -391,6 +412,19 @@ class MainWindow(QMainWindow):
         elif key == Qt.Key_Z and mod == Qt.ControlModifier:
             self.undostack.undo()
             e.accept()
+        elif key == Qt.Key_Up and mod == Qt.ControlModifier:
+            self.move_to_first_data(key)
+            e.accept()
+        elif key == Qt.Key_Down and mod == Qt.ControlModifier:
+            self.move_to_first_data(key)
+            e.accept()
+        # elif key == Qt.Key_Right and mod == Qt.ControlModifier:
+        elif key == 16777249 and mod == Qt.ControlModifier:
+            self.move_to_first_data(key)
+            e.accept()
+        elif key == Qt.Key_Left and mod == Qt.ControlModifier:
+            self.move_to_first_data(key)
+            e.accept()
         else:
             e.ignore()
         super().keyPressEvent(e)
@@ -422,14 +456,6 @@ class MainWindow(QMainWindow):
             for r in range(self.model.rowCount()):
                 self.view.setRowHeight(r, h)
 
-    def set_all_font_size(self, font_size):
-        fs = int(font_size) if font_size.isdigit() else 0
-
-        if fs > 0:
-            view_font = QtGui.QFont()
-            view_font.setPointSize(fs)
-            self.view.setFont(view_font)
-
     def open(self, path = None):
         if not path:
             path, _ = QFileDialog.getOpenFileName(self, 'select open file')
@@ -457,6 +483,8 @@ class MainWindow(QMainWindow):
             self.open(path)
 
         self.save_ui_settings()
+
+        QMessageBox.information(self, 'save', 'saved')
 
     def save_ui_settings(self):
         co.save_settings('col_width', int(self.txt_cell_width.text()))
@@ -516,6 +544,37 @@ class MainWindow(QMainWindow):
             for c, t in enumerate(l.split(',')):
                 i = self.model.index(cur_i.row() + r, cur_i.column() + c)
                 self.model.set_data_at(i, t)
+
+    def move_to_first_data(self, key):
+        if key == Qt.Key_Up:
+            cur_i = self.view.currentIndex()
+            for r in range(cur_i.row(), 0, -1):
+                i = self.model.index(r, cur_i.column())
+                if i.data():
+                    self.view.setCurrentIndex(i)
+                    return
+        elif key == Qt.Key_Down:
+            cur_i = self.view.currentIndex()
+            for r in range(cur_i.row(), self.model.rowCount()):
+                i = self.model.index(r, cur_i.column())
+                if i.data():
+                    self.view.setCurrentIndex(i)
+                    return
+        elif key == Qt.Key_Left:
+            cur_i = self.view.currentIndex()
+            for c in range(cur_i.column(), 0, -1):
+                i = self.model.index(cur_i.row(), c)
+                if i.data():
+                    self.view.setCurrentIndex(i)
+                    return
+        elif key == Qt.Key_Right:
+            cur_i = self.view.currentIndex()
+            for c in range(cur_i.column(), self.model.colrowCount()):
+                i = self.model.index(cur_i.row(), c)
+                if i.data():
+                    self.view.setCurrentIndex(i)
+                    return
+
 
 
 class SetDataCommand(QUndoCommand):
