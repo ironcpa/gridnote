@@ -56,59 +56,47 @@ class NoteModel(QAbstractTableModel):
     def __init__(self, src_data, undostack):
         super().__init__()
         self.undostack = undostack
-        self.src_data = src_data
         self.max_row = 100
         self.max_col = 100
+        self.src_data = [[None for _ in range(100)] for _ in range(100)]
+        self.init_src_data(src_data)
+        self.src_style = [[None for _ in range(100)] for _ in range(100)]
+
+    def init_src_data(self, input):
+        # # for legacy model : 1d list
+        # for e in input_list:
+        #     self.src_data[e.r][e.c] = e
+
+        for r in range(len(input)):
+            for c in range(len(input[r])):
+                self.src_data[r][c] = input[r][c]
 
     def get_src_data(self):
         return self.src_data
 
     def data_at(self, index):
-        for e in self.src_data:
-            if e.is_data() and e.is_at(index):
-                return e
-
-    def data_at2(self, r, c):
-        for e in self.src_data:
-            if e.r == r and e.c == c:
-                return e
+        return self.src_data[index.row()][index.column()]
 
     def style_at(self, index):
-        for e in self.src_data:
-            if not e.is_data() and e.is_at(index):
-                return e
+        return self.src_style[index.row()][index.column()]
 
     def set_data_at(self, index, content):
-        data = self.data_at(index)
-        is_mod = False
-        if data:
-            if content == '':
-                self.del_data_at(index)
-            else:
-                data.content = content
-            is_mod = True
-        else:
-            if content == '':
-                pass
-            else:
-                self.src_data.append(NoteData(index.row(), index.column(), content))
-                is_mod = True
+        self.src_data[index.row()][index.column()] = NoteData(index.row(), index.column(), content)
+        self.dataChanged.emit(index, index)
 
-        if is_mod:
-            self.dataChanged.emit(index, index)
-
-    def set_style_at(self, index, bgcolor = None, fgcolor = None):
+    def set_style_at(self, index, bgcolor = None):
+        self.src_style[index.row()][index.column()] = StyleData(index.row(), index.column(), bgcolor)
+        self.dataChanged.emit(index, index)
         style = self.style_at(index)
         is_mod = False
         if style:
-            if bgcolor is None and fgcolor is None:
+            if bgcolor is None:
                self.del_style_at(index)
             else:
                 style.bgcolor = bgcolor
-                style.fgcolor = fgcolor
             is_mod = True
         else:
-            if bgcolor is None and fgcolor is None:
+            if bgcolor is None:
                 pass
             else:
                 self.src_data.append(StyleData(index.row(), index.column(), bgcolor))
@@ -118,18 +106,12 @@ class NoteModel(QAbstractTableModel):
             self.dataChanged.emit(index, index)
 
     def del_data_at(self, index):
-        for i, e in enumerate(self.src_data):
-            if e.is_data() and e.is_at(index):
-                del self.src_data[i]
-                self.dataChanged.emit(index, index)
-                return
+        self.src_data[index.row()][index.column()] = None
+        self.dataChanged.emit(index, index)
 
     def del_style_at(self, index):
-        for i, e in enumerate(self.src_data):
-            if not e.is_data() and e.is_at(index):
-                del self.src_data[i]
-                self.dataChanged.emit(index, index)
-                return
+        self.src_style[index.row()][index.column()] = None
+        self.dataChanged.emit(index, index)
 
     def has_data_at(self, index):
         return self.data_at(index) is not None
@@ -178,18 +160,19 @@ class NoteModel(QAbstractTableModel):
         return False
 
     def insert_all_row(self, from_index, rows = 1):
-        for e in self.src_data:
-            if e.r >= from_index.row():
-                e.r += rows
+        for r in range(self.rowCount()-1, from_index.row(), -1):
+            for c in range(self.columnCount()):
+                self.src_data[r][c] = self.src_data[r-1][c]
+                self.src_data[r-1][c] = None
 
         self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount(), self.columnCount()))
 
     def delete_all_row(self, from_index, rows = 1):
-        self.src_data = [e for e in self.src_data if e.r != from_index.row()]
-
-        for e in self.src_data:
-            if e.r > from_index.row():
-                e.r -= rows
+        for r in range(from_index.row(), self.rowCount()):
+            for c in range(self.columnCount()):
+                if r+1 < self.rowCount():
+                    self.src_data[r][c] = self.src_data[r+1][c]
+                    self.src_data[r+1][c] = None
 
         self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount(), self.columnCount()))
 
