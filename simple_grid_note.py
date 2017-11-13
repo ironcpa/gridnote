@@ -244,16 +244,16 @@ class NoteView(QTableView):
                 self.move_to_next_row()
             e.accept()
         elif key == Qt.Key_Up and mods == Qt.ControlModifier:
-            pass
+            e.ignore()
         elif key == Qt.Key_Down and mods == Qt.ControlModifier:
-            pass
+            e.ignore()
         elif key == Qt.Key_Left and mods == Qt.ControlModifier:
-            pass
+            e.ignore()
         elif key == Qt.Key_Right and mods == Qt.ControlModifier:
-            pass
+            e.ignore()
         else:
             e.ignore()
-        super(NoteView, self).keyPressEvent(e)
+            super(NoteView, self).keyPressEvent(e)
 
     def currentChanged(self, current: QModelIndex, previous: QModelIndex):
         r = previous.row()
@@ -418,8 +418,7 @@ class MainWindow(QMainWindow):
         elif key == Qt.Key_Down and mod == Qt.ControlModifier:
             self.move_to_first_data(key)
             e.accept()
-        # elif key == Qt.Key_Right and mod == Qt.ControlModifier:
-        elif key == 16777249 and mod == Qt.ControlModifier:
+        elif key == Qt.Key_Right and mod == Qt.ControlModifier:
             self.move_to_first_data(key)
             e.accept()
         elif key == Qt.Key_Left and mod == Qt.ControlModifier:
@@ -427,7 +426,7 @@ class MainWindow(QMainWindow):
             e.accept()
         else:
             e.ignore()
-        super().keyPressEvent(e)
+            super().keyPressEvent(e)
 
     def closeEvent(self, e: QtGui.QCloseEvent):
         co.save_settings('last_row', self.view.currentIndex().row())
@@ -545,36 +544,39 @@ class MainWindow(QMainWindow):
                 i = self.model.index(cur_i.row() + r, cur_i.column() + c)
                 self.model.set_data_at(i, t)
 
+    def move_to_index(self, index):
+        self.view.setCurrentIndex(index)
+        self.view.selectionModel().select(index, QItemSelectionModel.ClearAndSelect)
+
     def move_to_first_data(self, key):
         if key == Qt.Key_Up:
             cur_i = self.view.currentIndex()
-            for r in range(cur_i.row(), 0, -1):
+            for r in range(cur_i.row() - 1, 0, -1):
                 i = self.model.index(r, cur_i.column())
                 if i.data():
-                    self.view.setCurrentIndex(i)
+                    self.move_to_index(i)
                     return
         elif key == Qt.Key_Down:
             cur_i = self.view.currentIndex()
-            for r in range(cur_i.row(), self.model.rowCount()):
+            for r in range(cur_i.row() + 1, self.model.rowCount()):
                 i = self.model.index(r, cur_i.column())
                 if i.data():
-                    self.view.setCurrentIndex(i)
+                    self.move_to_index(i)
                     return
         elif key == Qt.Key_Left:
             cur_i = self.view.currentIndex()
-            for c in range(cur_i.column(), 0, -1):
+            for c in range(cur_i.column() - 1, 0, -1):
                 i = self.model.index(cur_i.row(), c)
                 if i.data():
-                    self.view.setCurrentIndex(i)
+                    self.move_to_index(i)
                     return
         elif key == Qt.Key_Right:
             cur_i = self.view.currentIndex()
-            for c in range(cur_i.column(), self.model.colrowCount()):
+            for c in range(cur_i.column() + 1, self.model.columnCount()):
                 i = self.model.index(cur_i.row(), c)
                 if i.data():
-                    self.view.setCurrentIndex(i)
+                    self.move_to_index(i)
                     return
-
 
 
 class SetDataCommand(QUndoCommand):
