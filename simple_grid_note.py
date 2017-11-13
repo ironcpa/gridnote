@@ -87,23 +87,6 @@ class NoteModel(QAbstractTableModel):
     def set_style_at(self, index, bgcolor = None):
         self.src_style[index.row()][index.column()] = StyleData(index.row(), index.column(), bgcolor)
         self.dataChanged.emit(index, index)
-        style = self.style_at(index)
-        is_mod = False
-        if style:
-            if bgcolor is None:
-               self.del_style_at(index)
-            else:
-                style.bgcolor = bgcolor
-            is_mod = True
-        else:
-            if bgcolor is None:
-                pass
-            else:
-                self.src_data.append(StyleData(index.row(), index.column(), bgcolor))
-                is_mod = True
-
-        if is_mod:
-            self.dataChanged.emit(index, index)
 
     def del_data_at(self, index):
         self.src_data[index.row()][index.column()] = None
