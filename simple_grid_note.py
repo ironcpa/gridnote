@@ -111,7 +111,7 @@ class NoteModel(QAbstractTableModel):
             if bgcolor is None and fgcolor is None:
                 pass
             else:
-                self.src_data.append(StyleData(index.row(), index.column(), bgcolor, fgcolor))
+                self.src_data.append(StyleData(index.row(), index.column(), bgcolor))
                 is_mod = True
 
         if is_mod:
@@ -194,12 +194,12 @@ class NoteModel(QAbstractTableModel):
         self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount(), self.columnCount()))
 
 
-class NoteEditDelegate(QStyledItemDelegate):
+class NoteDataDelegate(QStyledItemDelegate):
     def __init__(self):
         super().__init__()
 
     def createEditor(self, parent: QWidget, option: 'QStyleOptionViewItem', index: QModelIndex):
-        return super(NoteEditDelegate, self).createEditor(parent, option, index)
+        return super(NoteDataDelegate, self).createEditor(parent, option, index)
 
     def setEditorData(self, editor: QWidget, index: QModelIndex):
         curr_content = index.data(Qt.EditRole) or index.data(Qt.DisplayRole)
@@ -207,8 +207,8 @@ class NoteEditDelegate(QStyledItemDelegate):
 
     def paint(self, painter: QtGui.QPainter, option: 'QStyleOptionViewItem', index: QModelIndex):
         if index.data():
-            if index.data(Qt.BackgroundRole):
-                painter.fillRect(option.rect, index.data(Qt.BackgroundRole))
+            # if index.data(Qt.BackgroundRole):
+            #     painter.fillRect(option.rect, index.data(Qt.BackgroundRole))
 
             if option.state & QStyle.State_Selected:
                 painter.fillRect(option.rect, option.palette.highlight())
@@ -219,6 +219,21 @@ class NoteEditDelegate(QStyledItemDelegate):
             fw = fm.boundingRect(index.data()).width()
             # # sample cancel line
             # painter.drawLine(QPoint(option.rect.x(), option.rect.y() + 20), QPoint(option.rect.x() + fw, option.rect.y() + 20))
+        else:
+            # # don't know why this is needed. to avoid automatically fill rect with styledata in super
+            # if index.data(Qt.BackgroundRole):
+            #     return
+            QStyledItemDelegate.paint(self, painter, option, index)
+
+
+class NoteStyleDelegate(QStyledItemDelegate):
+    def __init__(self):
+        super().__init__()
+
+    def paint(self, painter: QtGui.QPainter, option: 'QStyleOptionViewItem', index: QModelIndex):
+        if index.data():
+            if index.data(Qt.BackgroundRole):
+                painter.fillRect(option.rect, index.data(Qt.BackgroundRole))
         else:
             QStyledItemDelegate.paint(self, painter, option, index)
 
@@ -231,6 +246,11 @@ class NoteView(QTableView):
         for c in range(self.model().columnCount()):
             self.setColumnWidth(c, w)
             self.setRowHeight(c, h)
+
+
+class NoteDataView(NoteView):
+    def __init__(self):
+        super().__init__()
 
     def keyPressEvent(self, e: QtGui.QKeyEvent):
         key = e.key()
@@ -303,18 +323,26 @@ class MainWindow(QMainWindow):
         if not self.model:
             self.model = NoteModel(default_list_data)
 
-        item_delegate = NoteEditDelegate()
+        data_delegate = NoteDataDelegate()
+        style_delegate = NoteStyleDelegate()
 
-        self.top_view.setItemDelegate(item_delegate)
+        self.top_view.setItemDelegate(data_delegate)
         self.top_view.setModel(self.model)
         self.top_view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
         self.top_view.set_cell_font_size(self.txt_cell_font_size.text())
         # self.top_view.setShowGrid(False)
 
-        self.view.setItemDelegate(item_delegate)
+        if self.style_view:
+            self.style_view.setItemDelegate(style_delegate)
+            self.style_view.setModel(self.model)
+            self.style_view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
+
+        self.view.setItemDelegate(data_delegate)
         self.view.setModel(self.model)
         last_index = self.model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
         self.view.setCurrentIndex(last_index)
+        if self.style_view:
+            self.style_view.setCurrentIndex(last_index)
 
         self.view.setShowGrid(False)
         self.view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
@@ -362,7 +390,7 @@ class MainWindow(QMainWindow):
         gridlayout.addLayout(settingLayout, 0, 0)
         gridlayout.addLayout(buttonlayout, 1, 0)
 
-        self.top_view = NoteView()
+        self.top_view = NoteDataView()
         self.top_view.horizontalScrollBar().setVisible(False)
         self.top_view.verticalScrollBar().setVisible(False)
         self.top_view.verticalHeader().setVisible(False)
@@ -370,15 +398,31 @@ class MainWindow(QMainWindow):
         # self.top_view.setStyleSheet('QTableView:item {background: yellow}')
         gridlayout.addWidget(self.top_view, 2, 0)
 
-        self.view = NoteView()
+        self.style_view = None
+        # self.style_view = NoteView()
+        # self.style_view.horizontalHeader().setVisible(False)
+        # self.style_view.verticalHeader().setVisible(False)
+        # # self.style_view.setStyleSheet('* {background-color: yellow;; gridline-color: red}')
+        # gridlayout.addWidget(self.style_view, 3, 0)
+
+        self.view = NoteDataView()
         self.view.horizontalHeader().setVisible(False)
         self.view.verticalHeader().setVisible(False)
+        if self.style_view:
+            self.view.setStyleSheet('* {background-color: transparent}')
         gridlayout.addWidget(self.view, 3, 0)
 
         self.view.horizontalScrollBar().valueChanged.connect(self.sync_hscroll)
+        self.view.verticalScrollBar().valueChanged.connect(self.sync_vscroll)
 
     def sync_hscroll(self, value):
         self.top_view.horizontalScrollBar().setValue(value)
+        if self.style_view:
+            self.style_view.horizontalScrollBar().setValue(value)
+
+    def sync_vscroll(self, value):
+        if self.style_view:
+            self.style_view.verticalScrollBar().setValue(value)
 
     def init_focus_policy(self):
         self.txt_cell_width.setFocusPolicy(Qt.ClickFocus)
