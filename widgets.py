@@ -30,6 +30,9 @@ class LabeledLineEdit(QWidget):
     def text(self):
         return self.lineedit.text()
 
+    def set_text(self, text):
+        self.lineedit.setText(str(text))
+
 
 class FileChooser(QWidget):
     def __init__(self):

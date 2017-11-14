@@ -55,18 +55,16 @@ class NoteModel(QAbstractTableModel):
     def __init__(self, src_data, undostack):
         super().__init__()
         self.undostack = undostack
-        self.max_row = 100
-        self.max_col = 100
-        self.src_data = [[None for _ in range(100)] for _ in range(100)]
         self.init_src_data(src_data)
-        self.src_style = [[None for _ in range(100)] for _ in range(100)]
-
         self.check_col = 4
 
     def init_src_data(self, input):
         # # for legacy model : 1d list
         # for e in input_list:
         #     self.src_data[e.r][e.c] = e
+
+        self.src_data = [[None for c in range(len(input[r]))] for r in range(len(input))]
+        self.src_style = [[None for c in range(len(input[r]))] for r in range(len(input))]
 
         for r in range(len(input)):
             for c in range(len(input[r])):
@@ -104,10 +102,10 @@ class NoteModel(QAbstractTableModel):
         return self.style_at(index) is not None
 
     def rowCount(self, parent: QModelIndex = ...):
-        return self.max_row
+        return len(self.src_data)
 
     def columnCount(self, parent: QModelIndex = ...):
-        return self.max_col
+        return len(self.src_data[0])
 
     def data(self, index: QModelIndex, role: int = ...):
         if not index.isValid():
@@ -143,13 +141,16 @@ class NoteModel(QAbstractTableModel):
             return True
         return False
 
+    def emit_all_data_changed(self):
+        self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount(), self.columnCount()))
+
     def insert_all_row(self, from_index, rows = 1):
         for r in range(self.rowCount()-1, from_index.row(), -1):
             for c in range(self.columnCount()):
                 self.src_data[r][c] = self.src_data[r-1][c]
                 self.src_data[r-1][c] = None
 
-        self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount(), self.columnCount()))
+        self.emit_all_data_changed()
 
     def delete_all_row(self, from_index, rows = 1):
         for r in range(from_index.row(), self.rowCount()):
@@ -158,7 +159,48 @@ class NoteModel(QAbstractTableModel):
                     self.src_data[r][c] = self.src_data[r+1][c]
                     self.src_data[r+1][c] = None
 
-        self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount(), self.columnCount()))
+        self.emit_all_data_changed()
+
+    def is_data_row(self, row):
+        return False
+
+    def is_data_col(self, col):
+        return False
+
+    def change_row_count(self, count_to):
+        if self.rowCount() < count_to:
+            for r in range(self.rowCount(), count_to):
+                self.src_data.append([None for _ in range(self.columnCount())])
+        elif self.rowCount() > count_to:
+            for r in range(count_to, self.rowCount()):
+                if self.is_data_row(r):
+                    return False
+            for r in range(self.rowCount(), count_to, -1):
+                self.src_data.pop()
+        else:
+            pass
+
+        self.emit_all_data_changed()
+        return True
+
+    def change_col_count(self, count_to):
+        cur_col_cnt = self.columnCount()
+        if cur_col_cnt < count_to:
+            for r in range(self.rowCount()):
+                for c in range(cur_col_cnt, count_to):
+                    self.src_data[r].append(None)
+        elif cur_col_cnt > count_to:
+            for c in range(count_to, cur_col_cnt):
+                if self.is_data_col(c):
+                    return False
+            for r in range(self.rowCount()):
+                for c in range(cur_col_cnt, count_to, -1):
+                    self.src_data[r].pop()
+        else:
+            pass
+
+        self.emit_all_data_changed()
+        return True
 
 
 class NoteDataDelegate(QStyledItemDelegate):
@@ -235,11 +277,21 @@ class NoteStyleDelegate(QStyledItemDelegate):
 class NoteView(QTableView):
     def __init__(self):
         super().__init__()
+        self.row_h = 0
+        self.col_w = 0
 
     def set_cell_size(self, w, h):
+        self.row_h = h
+        self.col_w = w
+
+    def setModel(self, model: QAbstractItemModel):
+        super(NoteView, self).setModel(model)
+        self.apply_cell_size()
+
+    def apply_cell_size(self):
         for c in range(self.model().columnCount()):
-            self.setColumnWidth(c, w)
-            self.setRowHeight(c, h)
+            self.setColumnWidth(c, self.col_w)
+            self.setRowHeight(c, self.row_h)
 
 
 class NoteDataView(NoteView):
@@ -304,53 +356,18 @@ default_list_data = [[]]
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setup_ui(self)
+        self.setup_ui()
         self.init_focus_policy()
+        self.init_signal_slots()
 
         self.undostack = QUndoStack()
         self.curr_path = None
 
-        self.open(co.load_settings('last_file'))
-        if not self.model:
-            self.model = NoteModel(default_list_data, self.undostack)
+        self.init_views()
 
-        data_delegate = NoteDataDelegate()
-        style_delegate = NoteStyleDelegate()
+        self.open_last_file()
 
-        self.top_view.setItemDelegate(data_delegate)
-        self.top_view.setModel(self.model)
-        self.top_view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
-        self.top_view.set_cell_font_size(self.txt_cell_font_size.text())
-        # self.top_view.setShowGrid(False)
-
-        if self.style_view:
-            self.style_view.setItemDelegate(style_delegate)
-            self.style_view.setModel(self.model)
-            self.style_view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
-
-        self.view.setItemDelegate(data_delegate)
-        self.view.setModel(self.model)
-        last_index = self.model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
-        self.view.setCurrentIndex(last_index)
-        if self.style_view:
-            self.style_view.setCurrentIndex(last_index)
-
-        self.view.setShowGrid(False)
-        self.view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
-        self.view.set_cell_font_size(self.txt_cell_font_size.text())
-
-        self.txt_cell_width.edit_finished.connect(self.set_all_column_width)
-        self.txt_cell_height.edit_finished.connect(self.set_all_row_height)
-        self.txt_cell_font_size.edit_finished.connect(self.view.set_cell_font_size)
-
-        self.btn_open.clicked.connect(self.open)
-        self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
-        self.btn_save_as.clicked.connect(lambda state: self.save())
-        self.btn_new.clicked.connect(self.create_new)
-        self.btn_bg_color.clicked.connect(self.set_bgcolor)
-        self.btn_clear_bg_color.clicked.connect(self.clear_bgcolor)
-
-    def setup_ui(self, dummy):
+    def setup_ui(self):
         self.setGeometry(100, 100, 800, 600)
 
         gridlayout = QGridLayout()
@@ -358,22 +375,26 @@ class MainWindow(QMainWindow):
         self.centralWidget().setLayout(gridlayout)
 
         settingLayout = QHBoxLayout()
+        self.txt_row_count = LabeledLineEdit('row', 0)
+        self.txt_col_count = LabeledLineEdit('col', 0)
         self.txt_cell_width = LabeledLineEdit('cell width', co.load_settings('col_width', 50))
         self.txt_cell_height = LabeledLineEdit('cell height', co.load_settings('row_height', 30))
         self.txt_cell_font_size = LabeledLineEdit('font size', co.load_settings('cell_font_size', 12))
+        settingLayout.addWidget(self.txt_row_count)
+        settingLayout.addWidget(self.txt_col_count)
         settingLayout.addWidget(self.txt_cell_width)
         settingLayout.addWidget(self.txt_cell_height)
         settingLayout.addWidget(self.txt_cell_font_size)
 
-        buttonlayout = QHBoxLayout()
         self.txt_path = QLineEdit()
+
+        buttonlayout = QHBoxLayout()
         self.btn_open = QPushButton('open')
         self.btn_save = QPushButton('save')
         self.btn_save_as = QPushButton('save as')
         self.btn_new = QPushButton('new')
         self.btn_bg_color = QPushButton('b-color')
         self.btn_clear_bg_color = QPushButton('clear b-color')
-        buttonlayout.addWidget(self.txt_path)
         buttonlayout.addWidget(self.btn_open)
         buttonlayout.addWidget(self.btn_save)
         buttonlayout.addWidget(self.btn_save_as)
@@ -382,7 +403,8 @@ class MainWindow(QMainWindow):
         buttonlayout.addWidget(self.btn_clear_bg_color)
 
         gridlayout.addLayout(settingLayout, 0, 0)
-        gridlayout.addLayout(buttonlayout, 1, 0)
+        gridlayout.addWidget(self.txt_path, 1, 0)
+        gridlayout.addLayout(buttonlayout, 2, 0)
 
         self.top_view = NoteDataView()
         self.top_view.horizontalScrollBar().setVisible(False)
@@ -390,7 +412,7 @@ class MainWindow(QMainWindow):
         self.top_view.verticalHeader().setVisible(False)
         self.top_view.setMaximumHeight(100)
         # self.top_view.setStyleSheet('QTableView:item {background: yellow}')
-        gridlayout.addWidget(self.top_view, 2, 0)
+        gridlayout.addWidget(self.top_view, 3, 0)
 
         self.style_view = None
         # self.style_view = NoteView()
@@ -404,10 +426,44 @@ class MainWindow(QMainWindow):
         self.view.verticalHeader().setVisible(False)
         if self.style_view:
             self.view.setStyleSheet('* {background-color: transparent}')
-        gridlayout.addWidget(self.view, 3, 0)
+        gridlayout.addWidget(self.view, 4, 0)
+
+    def init_views(self):
+        data_delegate = NoteDataDelegate()
+        style_delegate = NoteStyleDelegate()
+
+        self.top_view.setItemDelegate(data_delegate)
+        self.top_view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
+        self.top_view.set_cell_font_size(self.txt_cell_font_size.text())
+
+        if self.style_view:
+            self.style_view.setItemDelegate(style_delegate)
+            self.style_view.setModel(self.model)
+            self.style_view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
+
+        self.view.setItemDelegate(data_delegate)
+        self.view.setShowGrid(False)
+        self.view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
+        self.view.set_cell_font_size(self.txt_cell_font_size.text())
 
         self.view.horizontalScrollBar().valueChanged.connect(self.sync_hscroll)
         self.view.verticalScrollBar().valueChanged.connect(self.sync_vscroll)
+
+    def init_signal_slots(self):
+        self.txt_row_count.edit_finished.connect(self.update_model_row_count)
+        self.txt_col_count.edit_finished.connect(self.update_model_col_count)
+        self.txt_cell_width.edit_finished.connect(self.set_all_column_width)
+        self.txt_cell_height.edit_finished.connect(self.set_all_row_height)
+        self.txt_cell_font_size.edit_finished.connect(self.view.set_cell_font_size)
+        self.btn_open.clicked.connect(self.open)
+        self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
+        self.btn_save_as.clicked.connect(lambda state: self.save())
+        self.btn_new.clicked.connect(self.create_new)
+        self.btn_bg_color.clicked.connect(self.set_bgcolor)
+        self.btn_clear_bg_color.clicked.connect(self.clear_bgcolor)
+
+    def open_last_file(self):
+        self.open(co.load_settings('last_file'))
 
     def sync_hscroll(self, value):
         self.top_view.horizontalScrollBar().setValue(value)
@@ -443,6 +499,10 @@ class MainWindow(QMainWindow):
             e.accept()
         elif key == Qt.Key_C and mod == Qt.ControlModifier:
             self.copy_to_clipboard()
+            e.accept()
+        elif key == Qt.Key_X and mod == Qt.ControlModifier:
+            self.copy_to_clipboard()
+            self.delete_selected()
             e.accept()
         elif key == Qt.Key_V and mod == Qt.ControlModifier:
             self.paste_from_clipboard()
@@ -481,6 +541,14 @@ class MainWindow(QMainWindow):
             model = NoteModel(pickle.load(f), self.undostack)
             return model
 
+    def update_model_row_count(self, count):
+        if not self.model.change_row_count(int(count)):
+            QMessageBox.warning(self, 'fail', 'some row has data')
+
+    def update_model_col_count(self, count):
+        if not self.model.change_col_count(int(count)):
+            QMessageBox.warning(self, 'fail', 'some row has data')
+
     def set_all_column_width(self, width):
         w = int(width) if width.isdigit() else 0
         if w > 0 and w <= 100:
@@ -493,6 +561,16 @@ class MainWindow(QMainWindow):
             for r in range(self.model.rowCount()):
                 self.view.setRowHeight(r, h)
 
+    def move_to_last_index(self):
+        last_index = self.model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
+        self.view.setCurrentIndex(last_index)
+        if self.style_view:
+            self.style_view.setCurrentIndex(last_index)
+
+    def show_model_row_col(self):
+        self.txt_row_count.set_text(self.model.rowCount())
+        self.txt_col_count.set_text(self.model.columnCount())
+
     def open(self, path = None):
         if not path:
             path, _ = QFileDialog.getOpenFileName(self, 'select open file')
@@ -500,11 +578,15 @@ class MainWindow(QMainWindow):
         model = self.load_model_from_file(path)
         if model:
             self.model = model
-            self.view.setModel(model)
-            self.view.show()
             self.txt_path.setText(path)
             self.curr_path = path
             co.save_settings('last_file', self.curr_path)
+
+            self.view.setModel(self.model)
+            self.top_view.setModel(self.model)
+
+            self.move_to_last_index()
+            self.show_model_row_col()
         else:
             QMessageBox.warning(self, 'open', "couldn't find file")
 
