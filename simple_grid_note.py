@@ -21,8 +21,7 @@ form_class = uic.loadUiType("./resource/mainwindow.ui")[0]
 #              ['10', '11', '12'],
 #              ['20', '21', '22'],
 #              ]
-default_data = [[str(x), str(y)] for x in range(50000)
-                for y in range(20)]
+default_data = [[]]
 
 
 class Data:
@@ -61,6 +60,8 @@ class NoteModel(QAbstractTableModel):
         self.src_data = [[None for _ in range(100)] for _ in range(100)]
         self.init_src_data(src_data)
         self.src_style = [[None for _ in range(100)] for _ in range(100)]
+
+        self.check_col = 4
 
     def init_src_data(self, input):
         # # for legacy model : 1d list
@@ -172,19 +173,46 @@ class NoteDataDelegate(QStyledItemDelegate):
         editor.setText(curr_content)
 
     def paint(self, painter: QtGui.QPainter, option: 'QStyleOptionViewItem', index: QModelIndex):
+        if index.column() == index.model().check_col:
+            painter.fillRect(option.rect, Qt.black)
+        if index.row() == 0:
+            painter.fillRect(option.rect, Qt.yellow)
+
         if index.data():
             # if index.data(Qt.BackgroundRole):
             #     painter.fillRect(option.rect, index.data(Qt.BackgroundRole))
 
+            fm = QtGui.QFontMetrics(option.font)
+            fh = fm.height() - fm.descent()
+            fw = fm.boundingRect(index.data()).width()
+            box_w = fw if fw > option.rect.width() else option.rect.width()
+
+            text_rect = QRect(option.rect)
+            text_rect.setWidth(box_w)
+            o_pen = painter.pen()
+            check_col = index.model().check_col
+            if index.model().index(index.row(), check_col).data() == 'o':
+                painter.fillRect(text_rect, Qt.green)
+            elif index.model().index(index.row(), check_col).data() == '>':
+                painter.fillRect(text_rect, Qt.blue)
+                painter.setPen(Qt.white)
+            elif index.model().index(index.row(), check_col).data() == 'x':
+                painter.fillRect(text_rect, Qt.red)
+                painter.setPen(Qt.white)
+            elif index.model().index(index.row(), check_col).data() == None:
+                painter.fillRect(text_rect, Qt.lightGray)
+
             if option.state & QStyle.State_Selected:
                 painter.fillRect(option.rect, option.palette.highlight())
 
-            fm = QtGui.QFontMetrics(option.font)
-            fh = fm.height() - fm.descent()
+            # fm = QtGui.QFontMetrics(option.font)
+            # fh = fm.height() - fm.descent()
             painter.drawText(option.rect.x(), option.rect.y() + fh, index.data())
-            fw = fm.boundingRect(index.data()).width()
+            # fw = fm.boundingRect(index.data()).width()
             # # sample cancel line
             # painter.drawLine(QPoint(option.rect.x(), option.rect.y() + 20), QPoint(option.rect.x() + fw, option.rect.y() + 20))
+
+            painter.setPen(o_pen)
         else:
             # # don't know why this is needed. to avoid automatically fill rect with styledata in super
             # if index.data(Qt.BackgroundRole):
@@ -269,10 +297,7 @@ class NoteDataView(NoteView):
         self.setCurrentIndex(self.model().index(cur.row() + 1, cur.column()))
 
 
-default_list_data = [NoteData(0, 0, 'a'),
-                     NoteData(0, 1, 'b'),
-                     NoteData(1, 1, 'c'),
-                     NoteData(3, 4, 'd')]
+default_list_data = [[]]
 
 
 # class MainWindow(QMainWindow, form_class):
@@ -287,7 +312,7 @@ class MainWindow(QMainWindow):
 
         self.open(co.load_settings('last_file'))
         if not self.model:
-            self.model = NoteModel(default_list_data)
+            self.model = NoteModel(default_list_data, self.undostack)
 
         data_delegate = NoteDataDelegate()
         style_delegate = NoteStyleDelegate()
@@ -321,6 +346,7 @@ class MainWindow(QMainWindow):
         self.btn_open.clicked.connect(self.open)
         self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
         self.btn_save_as.clicked.connect(lambda state: self.save())
+        self.btn_new.clicked.connect(self.create_new)
         self.btn_bg_color.clicked.connect(self.set_bgcolor)
         self.btn_clear_bg_color.clicked.connect(self.clear_bgcolor)
 
@@ -344,12 +370,14 @@ class MainWindow(QMainWindow):
         self.btn_open = QPushButton('open')
         self.btn_save = QPushButton('save')
         self.btn_save_as = QPushButton('save as')
+        self.btn_new = QPushButton('new')
         self.btn_bg_color = QPushButton('b-color')
         self.btn_clear_bg_color = QPushButton('clear b-color')
         buttonlayout.addWidget(self.txt_path)
         buttonlayout.addWidget(self.btn_open)
         buttonlayout.addWidget(self.btn_save)
         buttonlayout.addWidget(self.btn_save_as)
+        buttonlayout.addWidget(self.btn_new)
         buttonlayout.addWidget(self.btn_bg_color)
         buttonlayout.addWidget(self.btn_clear_bg_color)
 
@@ -494,6 +522,11 @@ class MainWindow(QMainWindow):
         self.save_ui_settings()
 
         QMessageBox.information(self, 'save', 'saved')
+
+    def create_new(self):
+        self.model = NoteModel(default_list_data, self.undostack)
+        self.view.setModel(self.model)
+        self.top_view.setModel(self.model)
 
     def save_ui_settings(self):
         co.save_settings('col_width', int(self.txt_cell_width.text()))
