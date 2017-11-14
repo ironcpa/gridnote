@@ -320,24 +320,13 @@ class NoteDataView(NoteView):
             else:
                 self.move_to_next_row()
             e.accept()
-        elif key == Qt.Key_Up and mods == Qt.ControlModifier:
+        # ignore keys
+        elif key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right) and mods == Qt.ControlModifier:
             e.ignore()
-        elif key == Qt.Key_Down and mods == Qt.ControlModifier:
-            e.ignore()
-        elif key == Qt.Key_Left and mods == Qt.ControlModifier:
-            e.ignore()
-        elif key == Qt.Key_Right and mods == Qt.ControlModifier:
-            e.ignore()
-        elif key == Qt.Key_Up and mods == Qt.ControlModifier | Qt.ShiftModifier:
-            e.ignore()
-        elif key == Qt.Key_Down and mods == Qt.ControlModifier | Qt.ShiftModifier:
-            e.ignore()
-        elif key == Qt.Key_Left and mods == Qt.ControlModifier | Qt.ShiftModifier:
-            e.ignore()
-        elif key == Qt.Key_Right and mods == Qt.ControlModifier | Qt.ShiftModifier:
+        elif key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right) and \
+                mods == Qt.ControlModifier | Qt.ShiftModifier:
             e.ignore()
         else:
-            e.ignore()
             super(NoteView, self).keyPressEvent(e)
 
     def currentChanged(self, current: QModelIndex, previous: QModelIndex):
@@ -530,21 +519,12 @@ class MainWindow(QMainWindow):
         elif key == Qt.Key_Z and mod == Qt.ControlModifier:
             self.undostack.undo()
             e.accept()
-        elif key == Qt.Key_Up and mod == Qt.ControlModifier:
+        elif key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Right, Qt.Key_Left) and mod == Qt.ControlModifier:
             self.move_to_first_data(key)
             e.accept()
-        elif key == Qt.Key_Down and mod == Qt.ControlModifier:
-            self.move_to_first_data(key)
-            e.accept()
-        elif key == Qt.Key_Right and mod == Qt.ControlModifier:
-            self.move_to_first_data(key)
-            e.accept()
-        elif key == Qt.Key_Left and mod == Qt.ControlModifier:
-            self.move_to_first_data(key)
-            e.accept()
-        elif mod == Qt.ControlModifier | Qt.ShiftModifier:
-            if key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Right, Qt.Key_Left):
-                self.move_to_end(key)
+        elif key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Right, Qt.Key_Left)\
+                and mod == Qt.ControlModifier | Qt.ShiftModifier:
+            self.move_to_end(key)
         else:
             e.ignore()
             super().keyPressEvent(e)
