@@ -6,7 +6,7 @@ from PyQt5.QtCore import *
 
 
 class LabeledLineEdit(QWidget):
-    edit_finished = pyqtSignal(str)
+    return_pressed = pyqtSignal(str)
 
     def __init__(self, label_text = '', edit_text = ''):
         super().__init__()
@@ -15,7 +15,7 @@ class LabeledLineEdit(QWidget):
         self.label.setText(label_text)
         self.lineedit.setText(str(edit_text))
 
-        self.lineedit.editingFinished.connect(lambda: self.edit_finished.emit(self.lineedit.text()))
+        self.lineedit.returnPressed.connect(lambda: self.return_pressed.emit(self.lineedit.text()))
 
     def init_ui(self):
         settingLayout = QHBoxLayout()

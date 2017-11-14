@@ -301,9 +301,9 @@ class MainWindow(QMainWindow):
         self.view.setShowGrid(False)
         self.set_all_font_size(self.txt_cell_font_size.text())
 
-        self.txt_cell_width.edit_finished.connect(self.set_all_column_width)
-        self.txt_cell_height.edit_finished.connect(self.set_all_row_height)
-        self.txt_cell_font_size.edit_finished.connect(self.set_all_font_size)
+        self.txt_cell_width.return_pressed.connect(self.set_all_column_width)
+        self.txt_cell_height.return_pressed.connect(self.set_all_row_height)
+        self.txt_cell_font_size.return_pressed.connect(self.set_all_font_size)
 
         self.btn_open.clicked.connect(self.open)
         self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))

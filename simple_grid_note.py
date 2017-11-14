@@ -162,9 +162,19 @@ class NoteModel(QAbstractTableModel):
         self.emit_all_data_changed()
 
     def is_data_row(self, row):
+        for c in range(self.columnCount()):
+            if self.src_data[row][c]:
+                # this is for bug of paste
+                if self.src_data[row][c] != '':
+                    return True
         return False
 
     def is_data_col(self, col):
+        for r in range(self.rowCount()):
+            if self.src_data[r][col]:
+                # this is for bug of paste
+                if self.src_data[r][col]:
+                    return True
         return False
 
     def change_row_count(self, count_to):
@@ -180,7 +190,7 @@ class NoteModel(QAbstractTableModel):
         else:
             pass
 
-        self.emit_all_data_changed()
+        self.layoutChanged.emit()
         return True
 
     def change_col_count(self, count_to):
@@ -199,7 +209,7 @@ class NoteModel(QAbstractTableModel):
         else:
             pass
 
-        self.emit_all_data_changed()
+        self.layoutChanged.emit()
         return True
 
 
@@ -289,9 +299,10 @@ class NoteView(QTableView):
         self.apply_cell_size()
 
     def apply_cell_size(self):
+        for r in range(self.model().rowCount()):
+            self.setRowHeight(r, self.row_h)
         for c in range(self.model().columnCount()):
             self.setColumnWidth(c, self.col_w)
-            self.setRowHeight(c, self.row_h)
 
 
 class NoteDataView(NoteView):
@@ -316,6 +327,14 @@ class NoteDataView(NoteView):
         elif key == Qt.Key_Left and mods == Qt.ControlModifier:
             e.ignore()
         elif key == Qt.Key_Right and mods == Qt.ControlModifier:
+            e.ignore()
+        elif key == Qt.Key_Up and mods == Qt.ControlModifier | Qt.ShiftModifier:
+            e.ignore()
+        elif key == Qt.Key_Down and mods == Qt.ControlModifier | Qt.ShiftModifier:
+            e.ignore()
+        elif key == Qt.Key_Left and mods == Qt.ControlModifier | Qt.ShiftModifier:
+            e.ignore()
+        elif key == Qt.Key_Right and mods == Qt.ControlModifier | Qt.ShiftModifier:
             e.ignore()
         else:
             e.ignore()
@@ -349,7 +368,7 @@ class NoteDataView(NoteView):
         self.setCurrentIndex(self.model().index(cur.row() + 1, cur.column()))
 
 
-default_list_data = [[]]
+default_list_data = [[None for c in range(100)] for r in range(100)]
 
 
 # class MainWindow(QMainWindow, form_class):
@@ -409,7 +428,7 @@ class MainWindow(QMainWindow):
         self.top_view = NoteDataView()
         self.top_view.horizontalScrollBar().setVisible(False)
         self.top_view.verticalScrollBar().setVisible(False)
-        self.top_view.verticalHeader().setVisible(False)
+        # self.top_view.verticalHeader().setVisible(False)
         self.top_view.setMaximumHeight(100)
         # self.top_view.setStyleSheet('QTableView:item {background: yellow}')
         gridlayout.addWidget(self.top_view, 3, 0)
@@ -423,7 +442,7 @@ class MainWindow(QMainWindow):
 
         self.view = NoteDataView()
         self.view.horizontalHeader().setVisible(False)
-        self.view.verticalHeader().setVisible(False)
+        # self.view.verticalHeader().setVisible(False)
         if self.style_view:
             self.view.setStyleSheet('* {background-color: transparent}')
         gridlayout.addWidget(self.view, 4, 0)
@@ -450,11 +469,11 @@ class MainWindow(QMainWindow):
         self.view.verticalScrollBar().valueChanged.connect(self.sync_vscroll)
 
     def init_signal_slots(self):
-        self.txt_row_count.edit_finished.connect(self.update_model_row_count)
-        self.txt_col_count.edit_finished.connect(self.update_model_col_count)
-        self.txt_cell_width.edit_finished.connect(self.set_all_column_width)
-        self.txt_cell_height.edit_finished.connect(self.set_all_row_height)
-        self.txt_cell_font_size.edit_finished.connect(self.view.set_cell_font_size)
+        self.txt_row_count.return_pressed.connect(self.update_model_row_count)
+        self.txt_col_count.return_pressed.connect(self.update_model_col_count)
+        self.txt_cell_width.return_pressed.connect(self.set_all_column_width)
+        self.txt_cell_height.return_pressed.connect(self.set_all_row_height)
+        self.txt_cell_font_size.return_pressed.connect(self.view.set_cell_font_size)
         self.btn_open.clicked.connect(self.open)
         self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
         self.btn_save_as.clicked.connect(lambda state: self.save())
@@ -479,6 +498,7 @@ class MainWindow(QMainWindow):
         self.txt_cell_height.setFocusPolicy(Qt.ClickFocus)
         self.txt_cell_font_size.setFocusPolicy(Qt.ClickFocus)
         self.txt_path.setFocusPolicy(Qt.NoFocus)
+        self.top_view.setFocusPolicy(Qt.NoFocus)
 
         self.view.setFocus()
 
@@ -522,6 +542,9 @@ class MainWindow(QMainWindow):
         elif key == Qt.Key_Left and mod == Qt.ControlModifier:
             self.move_to_first_data(key)
             e.accept()
+        elif mod == Qt.ControlModifier | Qt.ShiftModifier:
+            if key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Right, Qt.Key_Left):
+                self.move_to_end(key)
         else:
             e.ignore()
             super().keyPressEvent(e)
@@ -554,12 +577,14 @@ class MainWindow(QMainWindow):
         if w > 0 and w <= 100:
             for c in range(self.model.columnCount()):
                 self.view.setColumnWidth(c, w)
+                self.top_view.setColumnWidth(c, w)
 
     def set_all_row_height(self, height):
         h = int(height) if height.isdigit() else 0
         if h > 0 and h <= 100:
             for r in range(self.model.rowCount()):
                 self.view.setRowHeight(r, h)
+                self.top_view.setRowHeight(r, h)
 
     def move_to_last_index(self):
         last_index = self.model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
@@ -609,6 +634,7 @@ class MainWindow(QMainWindow):
         self.model = NoteModel(default_list_data, self.undostack)
         self.view.setModel(self.model)
         self.top_view.setModel(self.model)
+        self.show_model_row_col()
 
     def save_ui_settings(self):
         co.save_settings('col_width', int(self.txt_cell_width.text()))
@@ -702,6 +728,17 @@ class MainWindow(QMainWindow):
                 if i.data():
                     self.move_to_index(i)
                     return
+
+    def move_to_end(self, key):
+        cur_i = self.view.currentIndex()
+        if key == Qt.Key_Up:
+            self.move_to_index(self.model.index(0, cur_i.column()))
+        elif key == Qt.Key_Down:
+            self.move_to_index(self.model.index(self.model.rowCount() - 1, cur_i.column()))
+        elif key == Qt.Key_Left:
+            self.move_to_index(self.model.index(cur_i.row(), 0))
+        elif key == Qt.Key_Right:
+            self.move_to_index(self.model.index(cur_i.row(), self.model.columnCount() - 1))
 
 
 class SetDataCommand(QUndoCommand):
