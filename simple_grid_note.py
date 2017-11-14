@@ -59,10 +59,6 @@ class NoteModel(QAbstractTableModel):
         self.check_col = 4
 
     def init_src_data(self, input):
-        # # for legacy model : 1d list
-        # for e in input_list:
-        #     self.src_data[e.r][e.c] = e
-
         self.src_data = [[None for c in range(len(input[r]))] for r in range(len(input))]
         self.src_style = [[None for c in range(len(input[r]))] for r in range(len(input))]
 
@@ -217,6 +213,10 @@ class NoteDataDelegate(QStyledItemDelegate):
     def __init__(self):
         super().__init__()
 
+        self.color_complete = Qt.green
+        self.color_blank = QtGui.QColor(230, 230, 230)
+        self.color_end = Qt.darkCyan
+
     def createEditor(self, parent: QWidget, option: 'QStyleOptionViewItem', index: QModelIndex):
         return super(NoteDataDelegate, self).createEditor(parent, option, index)
 
@@ -225,6 +225,9 @@ class NoteDataDelegate(QStyledItemDelegate):
         editor.setText(curr_content)
 
     def paint(self, painter: QtGui.QPainter, option: 'QStyleOptionViewItem', index: QModelIndex):
+        if index.row() == index.model().rowCount() - 1 \
+                or index.column() == index.model().columnCount() - 1:
+            painter.fillRect(option.rect, self.color_end)
         if index.column() == index.model().check_col:
             painter.fillRect(option.rect, Qt.black)
         if index.row() == 0:
@@ -244,7 +247,7 @@ class NoteDataDelegate(QStyledItemDelegate):
             o_pen = painter.pen()
             check_col = index.model().check_col
             if index.model().index(index.row(), check_col).data() == 'o':
-                painter.fillRect(text_rect, Qt.green)
+                painter.fillRect(text_rect, self.color_complete)
             elif index.model().index(index.row(), check_col).data() == '>':
                 painter.fillRect(text_rect, Qt.blue)
                 painter.setPen(Qt.white)
@@ -252,7 +255,7 @@ class NoteDataDelegate(QStyledItemDelegate):
                 painter.fillRect(text_rect, Qt.red)
                 painter.setPen(Qt.white)
             elif index.model().index(index.row(), check_col).data() == None:
-                painter.fillRect(text_rect, Qt.lightGray)
+                painter.fillRect(text_rect, self.color_blank)
 
             if option.state & QStyle.State_Selected:
                 painter.fillRect(option.rect, option.palette.highlight())
@@ -331,7 +334,7 @@ class NoteDataView(NoteView):
 
     def currentChanged(self, current: QModelIndex, previous: QModelIndex):
         r = previous.row()
-        for c in range(100):
+        for c in range(self.model().columnCount()):
             i = self.model().index(r, c)
             if self.model().data(i):
                 self.update(i)
@@ -357,7 +360,7 @@ class NoteDataView(NoteView):
         self.setCurrentIndex(self.model().index(cur.row() + 1, cur.column()))
 
 
-default_list_data = [[None for c in range(100)] for r in range(100)]
+default_list_data = [[None for c in range(50)] for r in range(100)]
 
 
 # class MainWindow(QMainWindow, form_class):
@@ -545,7 +548,10 @@ class MainWindow(QMainWindow):
             return model
 
     def update_model_row_count(self, count):
-        if not self.model.change_row_count(int(count)):
+        ok = self.model.change_row_count(int(count))
+        if ok:
+            self.view.apply_cell_size()
+        else:
             QMessageBox.warning(self, 'fail', 'some row has data')
 
     def update_model_col_count(self, count):
@@ -672,6 +678,8 @@ class MainWindow(QMainWindow):
         cur_i = self.view.currentIndex()
         for r, l in enumerate(text.splitlines()):
             for c, t in enumerate(l.split(',')):
+                if t == '':
+                    continue
                 i = self.model.index(cur_i.row() + r, cur_i.column() + c)
                 self.model.set_data_at(i, t)
 
