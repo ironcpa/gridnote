@@ -225,22 +225,27 @@ class JobModel(NoteModel):
     def children_job_indexes(self, index):
         results = []
         for r in range(index.row() + 1, self.rowCount()):
+            is_neighbor = self.index(r, index.column()).data() is not None
+            if is_neighbor:
+                break
             i = self.index(r, index.column() + 1)
             if self.index(r, index.column() + 1).data():
                 results.append(i)
-            else:
-                break
         return results
 
     def update_checker(self, index):
+        if index.column() == self.check_col:
+            return
+
         if not index or not index.isValid():
             return
+        print('update_checker ({}:{})'.format(index.row(), index.column()))
 
         children_indexes = self.children_job_indexes(index)
         is_all_complete = True
         is_progressing = False
-        for j in children_indexes:
-            checker = self.rel_checker(j)
+        for i in children_indexes:
+            checker = self.rel_checker(i)
             if checker != 'o':
                 is_all_complete = False
             if checker in ('o', '>'):
@@ -249,13 +254,19 @@ class JobModel(NoteModel):
             self.set_checker(index.row(), 'o')
         elif is_progressing:
             self.set_checker(index.row(), '>')
+        else:
+            self.set_checker(index.row(), None)
 
     def checker(self, row):
         return self.data_at(self.index(row, self.check_col)).content
 
-    def set_checker(self, row, checker):
-        i = self.index(row, self.check_col)
-        self.set_data_at(self.index(row, self.check_col), checker)
+    def set_checker(self, row, checker = None):
+        if checker:
+            i = self.index(row, self.check_col)
+            self.set_data_at(self.index(row, self.check_col), checker)
+        else:
+            self.del_data_at(self.index(row, self.check_col))
+
         self.update_checker(self.parent_job_index(self.first_data_index_from_checker(row)))
 
     def first_data_index_from_checker(self, checker_row):
@@ -410,6 +421,8 @@ class NoteDataView(NoteView):
             e.ignore()
         elif key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right) and \
                 mods == Qt.ControlModifier | Qt.ShiftModifier:
+            e.ignore()
+        elif key in (Qt.Key_Delete,):
             e.ignore()
         else:
             super(NoteView, self).keyPressEvent(e)
@@ -632,7 +645,7 @@ class MainWindow(QMainWindow):
             return None
 
         with open(path, 'rb') as f:
-            model = NoteModel(pickle.load(f), self.undostack)
+            model = JobModel(pickle.load(f), self.undostack)
             return model
 
     def update_model_row_count(self, count):
@@ -705,7 +718,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, 'save', 'saved')
 
     def create_new(self):
-        self.model = NoteModel(default_list_data, self.undostack)
+        self.model = JobModel(default_list_data, self.undostack)
         self.view.setModel(self.model)
         self.top_view.setModel(self.model)
         self.show_model_row_col()
@@ -716,9 +729,11 @@ class MainWindow(QMainWindow):
         co.save_settings('cell_font_size', int(self.txt_cell_font_size.text()))
 
     def delete_selected(self):
-        indexes = self.view.selectionModel().selectedIndexes()
-        for i in indexes:
-            self.model.del_data_at(i)
+        cmd = DeleteCommand(self.view.selectionModel().selectedIndexes())
+        self.undostack.push(cmd)
+        # indexes = self.view.selectionModel().selectedIndexes()
+        # for i in indexes:
+        #     self.model.del_data_at(i)
 
     def insert_all_row(self):
         cur_i = self.view.currentIndex()
@@ -838,13 +853,49 @@ class SetDataCommand(QUndoCommand):
         old_data = self.model.data_at(self.index)
         if old_data:
             self.old_value = old_data.content
-        self.model.set_data_at(self.index, self.new_value)
+        if self.index.column() == self.model.check_col:
+            self.model.set_checker(self.index.row(), self.new_value)
+        else:
+            self.model.set_data_at(self.index, self.new_value)
 
     def undo(self):
         if self.old_value:
-            self.model.set_data_at(self.index, self.old_value)
+            if self.index.column() == self.model.check_col:
+                self.model.set_checker(self.index.row(), self.old_value)
+            else:
+                self.model.set_data_at(self.index, self.old_value)
         else:
-            self.model.del_data_at(self.index)
+            if self.index.column() == self.model.check_col:
+                self.model.set_checker(self.index.row())
+            else:
+                self.model.del_data_at(self.index)
+
+
+class DeleteCommand(QUndoCommand):
+    def __init__(self, indexes):
+        super().__init__('delete')
+        self.indexes = indexes
+        if len(indexes) > 0:
+            self.model = indexes[0].model()
+        self.deleted_data = []
+
+    def redo(self):
+        for i in self.indexes:
+            d = self.model.data_at(i)
+            if d:
+                self.deleted_data.append(d)
+                if i.column() == self.model.check_col:
+                    self.model.set_checker(i.row(), None)
+                else:
+                    self.model.del_data_at(i)
+
+    def undo(self):
+        for e in self.deleted_data:
+            if e.c == self.model.check_col:
+                self.model.set_checker(e.r, e.content)
+            else:
+                self.model.set_data_at(self.model.index(e.r, e.c), e.content)
+        self.deleted_data.clear()
 
 
 class InsertAllRowCommand(QUndoCommand):
