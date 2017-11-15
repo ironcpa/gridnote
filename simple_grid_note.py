@@ -26,6 +26,7 @@ default_data = [[]]
 
 class Data:
     def __init__(self, r = 0, c = 0):
+        # these are needed on commands undo
         self.r = r
         self.c = c
 
@@ -224,6 +225,20 @@ class NoteDataDelegate(QStyledItemDelegate):
         curr_content = index.data(Qt.EditRole) or index.data(Qt.DisplayRole)
         editor.setText(curr_content)
 
+    def has_left_data(self, index):
+        for c in range(index.column()-1, index.model().check_col, -1):
+            if index.model().index(index.row(), c).data():
+                return True
+        return False
+
+    def is_checker_pos(self, index):
+        if index.column() <= index.model().check_col:
+            return False
+        r_index = index.model().index(index.row(), index.column() + 1)
+        if r_index.data() and not self.has_left_data(index):
+            return True
+        return False
+
     def paint(self, painter: QtGui.QPainter, option: 'QStyleOptionViewItem', index: QModelIndex):
         if index.row() == index.model().rowCount() - 1 \
                 or index.column() == index.model().columnCount() - 1:
@@ -233,13 +248,17 @@ class NoteDataDelegate(QStyledItemDelegate):
         if index.row() == 0:
             painter.fillRect(option.rect, Qt.yellow)
 
+        # test : checker on left of data
+        # if self.is_checker_pos(index):
+        #     painter.fillRect(option.rect, Qt.black)
+
         if index.data():
             # if index.data(Qt.BackgroundRole):
             #     painter.fillRect(option.rect, index.data(Qt.BackgroundRole))
 
             fm = QtGui.QFontMetrics(option.font)
             fh = fm.height() - fm.descent()
-            fw = fm.boundingRect(index.data()).width()
+            fw = fm.boundingRect(index.data()).width() + 10
             box_w = fw if fw > option.rect.width() else option.rect.width()
 
             text_rect = QRect(option.rect)
@@ -509,6 +528,12 @@ class MainWindow(QMainWindow):
         elif key == Qt.Key_K and mod == Qt.ControlModifier:
             self.delete_all_row()
             e.accept()
+        elif key == Qt.Key_O and mod == Qt.ControlModifier:
+            # self.insert_sel_col()
+            e.accept()
+        elif key == Qt.Key_L and mod == Qt.ControlModifier:
+            # self.delete_all_row()
+            e.accept()
         elif key == Qt.Key_C and mod == Qt.ControlModifier:
             self.copy_to_clipboard()
             e.accept()
@@ -640,6 +665,14 @@ class MainWindow(QMainWindow):
     def delete_all_row(self):
         cur_i = self.view.currentIndex()
         cmd = DeleteAllRowCommand(cur_i)
+        self.undostack.push(cmd)
+
+    def insert_sel_col(self):
+        cmd = InsertColumnCommand(self.view.selectedIndexes())
+        self.undostack.push(cmd)
+
+    def delete_sel_col(self):
+        cmd = DeleteColumnCommand(self.view.selectedIndexes())
         self.undostack.push(cmd)
 
     def set_bgcolor(self):
@@ -788,6 +821,51 @@ class DeleteAllRowCommand(QUndoCommand):
         for e in self.deleted_data:
             model.set_data_at(model.index(e.r, e.c), e.content)
         self.deleted_data.clear()
+
+
+class InsertColumnCommand(QUndoCommand):
+    def __init__(self, indexes):
+        super(InsertColumnCommand, self).__init__('insert columns')
+
+        self.model = indexes[0].model()
+        self.indexes = indexes
+        self.inserted_data = []
+        self.deleted_data = []
+
+    def redo(self):
+        for i in self.indexes:
+            r, cur_c = i.row(), i.column()
+            model = i.model()
+            try:
+                for c in range(model.columnCount(), cur_c+1, -1):
+                    left_d = model.data_at(model.index(r, c-1))
+                    if left_d:
+                        model.set_data_at(model.index(r, c), left_d.content)
+                        self.inserted_data.append(model.data_at(model.index(r, c)))
+                        model.del_data_at(model.index(r, c-1))
+                        self.deleted_data.append(left_d)
+            except Exception as err:
+                print(str(err))
+
+    def undo(self):
+        for e in self.inserted_data:
+            self.model.del_data_at(e.r, e.c)
+        for e in self.deleted_data:
+            self.model.set_data_at(e.r, e.c, e)
+
+        self.inserted_data.clear()
+        self.deleted_data.clear()
+
+
+class DeleteColumnCommand(QUndoCommand):
+    def __init__(self, indexes):
+        super(DeleteColumnCommand, self).__init__('delete columns')
+
+    def redo(self):
+        pass
+
+    def undo(self):
+        pass
 
 
 def catch_exceptions(self, t, val, tb):
