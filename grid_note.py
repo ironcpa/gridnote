@@ -248,7 +248,7 @@ class NoteDataDelegate(QStyledItemDelegate):
         if index.row() == 0:
             painter.fillRect(option.rect, Qt.yellow)
 
-        # test : checker on left of data
+        # # test : checker on left of data
         # if self.is_checker_pos(index):
         #     painter.fillRect(option.rect, Qt.black)
 
