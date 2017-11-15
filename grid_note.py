@@ -57,7 +57,6 @@ class NoteModel(QAbstractTableModel):
         super().__init__()
         self.undostack = undostack
         self.init_src_data(src_data)
-        self.check_col = 4
 
     def init_src_data(self, input):
         self.src_data = [[None for c in range(len(input[r]))] for r in range(len(input))]
@@ -208,6 +207,70 @@ class NoteModel(QAbstractTableModel):
 
         self.layoutChanged.emit()
         return True
+
+
+class JobModel(NoteModel):
+    def __init__(self, src_data, undostack):
+        super().__init__(src_data, undostack)
+        self.check_col = 4
+
+    def parent_job_index(self, index):
+        left_c = index.column() - 1
+        for r in range(index.row(), -1, -1):
+            i = self.index(r, left_c)
+            if self.index(r, left_c).data():
+                return i
+        return None
+
+    def children_job_indexes(self, index):
+        results = []
+        for r in range(index.row() + 1, self.rowCount()):
+            i = self.index(r, index.column() + 1)
+            if self.index(r, index.column() + 1).data():
+                results.append(i)
+            else:
+                break
+        return results
+
+    def update_checker(self, index):
+        if not index or not index.isValid():
+            return
+
+        children_indexes = self.children_job_indexes(index)
+        is_all_complete = True
+        is_progressing = False
+        for j in children_indexes:
+            checker = self.rel_checker(j)
+            if checker != 'o':
+                is_all_complete = False
+            if checker in ('o', '>'):
+                is_progressing = True
+        if is_all_complete:
+            self.set_checker(index.row(), 'o')
+        elif is_progressing:
+            self.set_checker(index.row(), '>')
+
+    def checker(self, row):
+        return self.data_at(self.index(row, self.check_col)).content
+
+    def set_checker(self, row, checker):
+        i = self.index(row, self.check_col)
+        self.set_data_at(self.index(row, self.check_col), checker)
+        self.update_checker(self.parent_job_index(self.first_data_index_from_checker(row)))
+
+    def first_data_index_from_checker(self, checker_row):
+        for c in range(self.check_col + 1, self.columnCount()):
+            i = self.index(checker_row, c)
+            if i.data():
+                return i
+        return None
+
+    def rel_checker(self, index):
+        data = self.data_at(self.index(index.row(), self.check_col))
+        if data:
+            return data.content
+        else:
+            return None
 
 
 class NoteDataDelegate(QStyledItemDelegate):
