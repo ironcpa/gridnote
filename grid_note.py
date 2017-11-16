@@ -587,10 +587,10 @@ class MainWindow(QMainWindow):
             self.delete_all_row()
             e.accept()
         elif key == Qt.Key_O and mod == Qt.ControlModifier:
-            # self.insert_sel_col()
+            self.insert_sel_col()
             e.accept()
         elif key == Qt.Key_L and mod == Qt.ControlModifier:
-            # self.delete_all_row()
+            self.delete_sel_col()
             e.accept()
         elif key == Qt.Key_C and mod == Qt.ControlModifier:
             self.copy_to_clipboard()
@@ -943,39 +943,71 @@ class InsertColumnCommand(QUndoCommand):
         self.deleted_data = []
 
     def redo(self):
+        m = self.model
         for i in self.indexes:
             r, cur_c = i.row(), i.column()
-            model = i.model()
-            try:
-                for c in range(model.columnCount(), cur_c+1, -1):
-                    left_d = model.data_at(model.index(r, c-1))
-                    if left_d:
-                        model.set_data_at(model.index(r, c), left_d.content)
-                        self.inserted_data.append(model.data_at(model.index(r, c)))
-                        model.del_data_at(model.index(r, c-1))
-                        self.deleted_data.append(left_d)
-            except Exception as err:
-                print(str(err))
+            for c in range(m.columnCount(), cur_c + 1, -1):
+                left_c = c - 1
+                left_d = m.data_at(m.index(r, left_c))
+                if left_d:
+                    m.set_data_at(m.index(r, c), left_d.content)
+                    self.inserted_data.append(m.data_at(m.index(r, c)))
+                    m.del_data_at(m.index(r, left_c))
+                    self.deleted_data.append(left_d)
+        m.layoutChanged.emit()
 
     def undo(self):
+        m = self.model
         for e in self.inserted_data:
-            self.model.del_data_at(e.r, e.c)
+            self.model.del_data_at(m.index(e.r, e.c))
         for e in self.deleted_data:
-            self.model.set_data_at(e.r, e.c, e)
+            self.model.set_data_at(m.index(e.r, e.c), e.content)
 
         self.inserted_data.clear()
         self.deleted_data.clear()
+        m.layoutChanged.emit()
 
 
 class DeleteColumnCommand(QUndoCommand):
     def __init__(self, indexes):
         super(DeleteColumnCommand, self).__init__('delete columns')
 
+        self.model = indexes[0].model()
+        self.indexes = indexes
+        self.inserted_data = []
+        self.deleted_data = []
+
     def redo(self):
-        pass
+        m = self.model
+        for i in self.indexes:
+            r, cur_c = i.row(), i.column()
+            for c in range(cur_c, m.columnCount()):
+                d = m.data_at(m.index(r, c))
+                right_c = c + 1
+                right_d = m.data_at(m.index(r, right_c))
+                if d:
+                    self.deleted_data.append(d)
+                    m.del_data_at(m.index(r, c))
+                    pass
+                if right_d:
+                    m.set_data_at(m.index(r, c), right_d.content)
+                    self.inserted_data.append(m.data_at(m.index(r, c)))
+                    m.del_data_at(m.index(r, right_c))
+                    self.deleted_data.append(right_d)
+                else:
+                    m.del_data_at(m.index(r, c))
+        m.layoutChanged.emit()
 
     def undo(self):
-        pass
+        m = self.model
+        for e in self.inserted_data:
+            self.model.del_data_at(m.index(e.r, e.c))
+        for e in self.deleted_data:
+            self.model.set_data_at(m.index(e.r, e.c), e.content)
+
+        self.inserted_data.clear()
+        self.deleted_data.clear()
+        m.layoutChanged.emit()
 
 
 def catch_exceptions(self, t, val, tb):
