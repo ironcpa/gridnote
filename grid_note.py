@@ -229,10 +229,10 @@ class JobModel(NoteModel):
         return results
 
     def update_checker(self, index):
-        if index.column() == self.check_col:
+        if not index or not index.isValid():
             return
 
-        if not index or not index.isValid():
+        if index.column() == self.check_col:
             return
 
         children_indexes = self.children_job_indexes(index)
@@ -571,6 +571,8 @@ class MainWindow(QMainWindow):
     def keyPressEvent(self, e: QtGui.QKeyEvent):
         key = e.key()
         mod = QApplication.keyboardModifiers()
+        # # for key check
+        # print('key={}, text={}, name={}'.format(key, e.text(), QtGui.QKeySequence(key).toString()))
         if key == Qt.Key_S and mod == Qt.ControlModifier:
             self.save(self.curr_path)
             e.accept()
@@ -620,7 +622,7 @@ class MainWindow(QMainWindow):
         elif key == Qt.Key_Slash and mod == Qt.ControlModifier:
             self.model.set_checker(self.view.currentIndex().row(), 'o')
             e.accept()
-        elif key == Qt.Key_QuoteLeft and mod == Qt.ControlModifier:
+        elif key == 39 and mod == Qt.ControlModifier:
             self.model.set_checker(self.view.currentIndex().row(), 'x')
             e.accept()
         else:
@@ -781,10 +783,11 @@ class MainWindow(QMainWindow):
         cur_i = self.view.currentIndex()
         for r, l in enumerate(csv.reader(text.split('\n'))):
             for c, t in enumerate(l):
-                if t == '':
-                    continue
                 i = self.model.index(cur_i.row() + r, cur_i.column() + c)
-                self.model.set_data_at(i, t)
+                if t == '':
+                    self.model.del_data_at(i)
+                else:
+                    self.model.set_data_at(i, t)
 
     def move_to_index(self, index):
         self.view.setCurrentIndex(index)
