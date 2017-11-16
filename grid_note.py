@@ -210,6 +210,9 @@ class JobModel(NoteModel):
         self.check_col = 4
 
     def parent_job_index(self, index):
+        if not index:
+            return None
+
         left_c = index.column() - 1
         for r in range(index.row(), -1, -1):
             i = self.index(r, left_c)
@@ -231,7 +234,6 @@ class JobModel(NoteModel):
     def update_checker(self, index):
         if not index or not index.isValid():
             return
-
         if index.column() == self.check_col:
             return
 

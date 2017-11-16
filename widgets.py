@@ -20,6 +20,7 @@ class LabeledLineEdit(QWidget):
 
     def init_ui(self):
         settingLayout = QHBoxLayout()
+        settingLayout.setContentsMargins(0, 0, 0, 0)
 
         self.label = QLabel('cell width')
         self.lineedit = QLineEdit()
@@ -48,6 +49,7 @@ class FileChooser(QWidget):
         self.btn_show_dialog = QPushButton('...')
 
         layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.txt_path)
         layout.addWidget(self.btn_show_dialog)
 
