@@ -1,27 +1,13 @@
 # -*-coding:utf-8-*-
 
-import os
 import sys
 import typing
 import pickle
 import io
 import csv
-from time import gmtime, strftime, localtime
-from PyQt5.QtWidgets import *
-from PyQt5 import uic, QtGui
-from PyQt5.QtCore import *
 
 import common_util as co
 from widgets import *
-
-
-form_class = uic.loadUiType("./resource/mainwindow.ui")[0]
-
-# base_data = [['00', '01', '02'],
-#              ['10', '11', '12'],
-#              ['20', '21', '22'],
-#              ]
-default_data = [[]]
 
 
 class Data:
@@ -46,9 +32,9 @@ class NoteData(Data):
         return True
 
 
-class StyleData(Data):
-    def __init__(self, r = 0, c = 0, bgcolor = None):
-        super().__init__(r, c)
+class StyledNoteData(NoteData):
+    def __init__(self, r = 0, c = 0, content = '', bgcolor = None):
+        super().__init__(r, c, content)
         self.bgcolor = bgcolor
 
 
@@ -60,7 +46,6 @@ class NoteModel(QAbstractTableModel):
 
     def init_src_data(self, input):
         self.src_data = [[None for c in range(len(input[r]))] for r in range(len(input))]
-        self.src_style = [[None for c in range(len(input[r]))] for r in range(len(input))]
 
         for r in range(len(input)):
             for c in range(len(input[r])):
@@ -73,14 +58,18 @@ class NoteModel(QAbstractTableModel):
         return self.src_data[index.row()][index.column()]
 
     def style_at(self, index):
-        return self.src_style[index.row()][index.column()]
+        return self.data_at(index)
 
     def set_data_at(self, index, content):
-        self.src_data[index.row()][index.column()] = NoteData(index.row(), index.column(), content)
+        self.src_data[index.row()][index.column()] = StyledNoteData(index.row(), index.column(), content)
         self.dataChanged.emit(index, index)
 
     def set_style_at(self, index, bgcolor = None):
-        self.src_style[index.row()][index.column()] = StyleData(index.row(), index.column(), bgcolor)
+        d = self.data_at(index)
+        if d:
+            d.bgcolor = bgcolor
+        else:
+            self.src_style[index.row()][index.column()] = StyledNoteData(index.row(), index.column(), bgcolor = bgcolor)
         self.dataChanged.emit(index, index)
 
     def del_data_at(self, index):
@@ -88,7 +77,14 @@ class NoteModel(QAbstractTableModel):
         self.dataChanged.emit(index, index)
 
     def del_style_at(self, index):
-        self.src_style[index.row()][index.column()] = None
+        d = self.data_at(index)
+        if not d:
+            return
+        else:
+            if d.content:
+                d.bgcolor = None
+            else:
+                self.del_data_at(index)
         self.dataChanged.emit(index, index)
 
     def has_data_at(self, index):
@@ -108,14 +104,13 @@ class NoteModel(QAbstractTableModel):
             return QVariant()
 
         data = self.data_at(index)
-        style = self.style_at(index)
 
-        if role == Qt.DisplayRole:
-            if data:
+        if data:
+            if role == Qt.DisplayRole:
                 return QVariant(data.content)
-        elif role == Qt.BackgroundRole:
-            if style and style.bgcolor:
-                return QVariant(QtGui.QBrush(style.bgcolor))
+            elif role == Qt.BackgroundRole:
+                if data.bgcolor:
+                    return QVariant(QtGui.QBrush(data.bgcolor))
 
         return QVariant()
 
@@ -255,6 +250,8 @@ class JobModel(NoteModel):
             self.set_checker(index.row(), '>')
         else:
             self.set_checker(index.row(), None)
+
+        self.layoutChanged.emit()
 
     def checker(self, row):
         return self.data_at(self.index(row, self.check_col)).content
@@ -519,18 +516,9 @@ class MainWindow(QMainWindow):
         # self.top_view.setStyleSheet('QTableView:item {background: yellow}')
         gridlayout.addWidget(self.top_view, 3, 0)
 
-        self.style_view = None
-        # self.style_view = NoteView()
-        # self.style_view.horizontalHeader().setVisible(False)
-        # self.style_view.verticalHeader().setVisible(False)
-        # # self.style_view.setStyleSheet('* {background-color: yellow;; gridline-color: red}')
-        # gridlayout.addWidget(self.style_view, 3, 0)
-
         self.view = NoteDataView()
         self.view.horizontalHeader().setVisible(False)
         # self.view.verticalHeader().setVisible(False)
-        if self.style_view:
-            self.view.setStyleSheet('* {background-color: transparent}')
         gridlayout.addWidget(self.view, 4, 0)
 
     def init_views(self):
@@ -540,11 +528,6 @@ class MainWindow(QMainWindow):
         self.top_view.setItemDelegate(data_delegate)
         self.top_view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
         self.top_view.set_cell_font_size(self.txt_cell_font_size.text())
-
-        if self.style_view:
-            self.style_view.setItemDelegate(style_delegate)
-            self.style_view.setModel(self.model)
-            self.style_view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
 
         self.view.setItemDelegate(data_delegate)
         self.view.setShowGrid(False)
@@ -572,12 +555,9 @@ class MainWindow(QMainWindow):
 
     def sync_hscroll(self, value):
         self.top_view.horizontalScrollBar().setValue(value)
-        if self.style_view:
-            self.style_view.horizontalScrollBar().setValue(value)
 
     def sync_vscroll(self, value):
-        if self.style_view:
-            self.style_view.verticalScrollBar().setValue(value)
+        pass
 
     def init_focus_policy(self):
         self.txt_cell_width.setFocusPolicy(Qt.ClickFocus)
@@ -599,6 +579,9 @@ class MainWindow(QMainWindow):
             e.accept()
         elif key == Qt.Key_I and mod == Qt.ControlModifier:
             self.insert_all_row()
+            e.accept()
+        elif key == Qt.Key_I and mod == Qt.ControlModifier | Qt.ShiftModifier:
+            self.insert_all_row(True)
             e.accept()
         elif key == Qt.Key_K and mod == Qt.ControlModifier:
             self.delete_all_row()
@@ -687,8 +670,6 @@ class MainWindow(QMainWindow):
     def move_to_last_index(self):
         last_index = self.model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
         self.view.setCurrentIndex(last_index)
-        if self.style_view:
-            self.style_view.setCurrentIndex(last_index)
 
     def show_model_row_col(self):
         self.txt_row_count.set_text(self.model.rowCount())
@@ -746,9 +727,9 @@ class MainWindow(QMainWindow):
         # for i in indexes:
         #     self.model.del_data_at(i)
 
-    def insert_all_row(self):
+    def insert_all_row(self, insert_below = False):
         cur_i = self.view.currentIndex()
-        cmd = InsertAllRowCommand(cur_i)
+        cmd = InsertAllRowCommand(cur_i, insert_below, self.view)
         self.undostack.push(cmd)
 
     def delete_all_row(self):
@@ -798,8 +779,8 @@ class MainWindow(QMainWindow):
     def paste_from_clipboard(self):
         text = QApplication.clipboard().text()
         cur_i = self.view.currentIndex()
-        for r, l in enumerate(text.splitlines()):
-            for c, t in enumerate(l.split(',')):
+        for r, l in enumerate(csv.reader(text.split('\n'))):
+            for c, t in enumerate(l):
                 if t == '':
                     continue
                 i = self.model.index(cur_i.row() + r, cur_i.column() + c)
@@ -910,13 +891,17 @@ class DeleteCommand(QUndoCommand):
 
 
 class InsertAllRowCommand(QUndoCommand):
-    def __init__(self, index):
+    def __init__(self, index, insert_below = False, view = None):
         super().__init__('insert all row')
 
-        self.index = index
+        self.index = index if not insert_below else index.model().index(index.row() + 1, index.column())
+        self.insert_below = insert_below
+        self.view = view
 
     def redo(self):
         self.index.model().insert_all_row(self.index)
+        if self.insert_below and self.view:
+            self.view.setCurrentIndex(self.index)
 
     def undo(self):
         self.index.model().delete_all_row(self.index)
