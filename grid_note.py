@@ -521,6 +521,9 @@ class MainWindow(QMainWindow):
         # self.view.verticalHeader().setVisible(False)
         gridlayout.addWidget(self.view, 4, 0)
 
+        self.setting_ui = SettingPane(self.centralWidget())
+        self.setting_ui.hide()
+
     def init_views(self):
         data_delegate = NoteDataDelegate()
         style_delegate = NoteStyleDelegate()
@@ -567,6 +570,9 @@ class MainWindow(QMainWindow):
         self.top_view.setFocusPolicy(Qt.NoFocus)
 
         self.view.setFocus()
+
+    def show_settings(self):
+        self.setting_ui.show()
 
     def keyPressEvent(self, e: QtGui.QKeyEvent):
         key = e.key()
@@ -624,6 +630,9 @@ class MainWindow(QMainWindow):
             e.accept()
         elif key == 39 and mod == Qt.ControlModifier:
             self.model.set_checker(self.view.currentIndex().row(), 'x')
+            e.accept()
+        elif key == Qt.Key_H and mod == Qt.ControlModifier:
+            self.show_settings()
             e.accept()
         else:
             e.ignore()
