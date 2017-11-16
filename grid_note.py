@@ -239,7 +239,6 @@ class JobModel(NoteModel):
 
         if not index or not index.isValid():
             return
-        print('update_checker ({}:{})'.format(index.row(), index.column()))
 
         children_indexes = self.children_job_indexes(index)
         is_all_complete = True
@@ -629,6 +628,18 @@ class MainWindow(QMainWindow):
         elif key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Right, Qt.Key_Left)\
                 and mod == Qt.ControlModifier | Qt.ShiftModifier:
             self.move_to_end(key)
+        elif key == Qt.Key_Period and mod == Qt.ControlModifier:
+            self.model.set_checker(self.view.currentIndex().row(), '>')
+            e.accept()
+        elif key == Qt.Key_Comma and mod == Qt.ControlModifier:
+            self.model.set_checker(self.view.currentIndex().row())
+            e.accept()
+        elif key == Qt.Key_Slash and mod == Qt.ControlModifier:
+            self.model.set_checker(self.view.currentIndex().row(), 'o')
+            e.accept()
+        elif key == Qt.Key_QuoteLeft and mod == Qt.ControlModifier:
+            self.model.set_checker(self.view.currentIndex().row(), 'x')
+            e.accept()
         else:
             e.ignore()
             super().keyPressEvent(e)
