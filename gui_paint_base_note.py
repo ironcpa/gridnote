@@ -33,8 +33,8 @@ class Data:
     def is_data(self):
         return False
 
-    def is_at(self, index):
-        return self.r == index.row() and self.c == index.column()
+    def is_at(self, r, c):
+        return self.r == r and self.c == c
 
 
 class NoteData(Data):
@@ -74,17 +74,17 @@ class NoteModel(QAbstractTableModel):
             if e.r == r and e.c == c:
                 return e
 
-    def style_at(self, index):
+    def style_at(self, r, c):
         for e in self.src_data:
-            if not e.is_data() and e.is_at(index):
+            if not e.is_data() and e.is_at(r, c):
                 return e
 
-    def set_data_at(self, index, content):
-        data = self.data_at(index)
+    def set_data_at(self, r, c, content):
+        data = self.data_at(r, c)
         is_mod = False
         if data:
             if content == '':
-                self.del_data_at(index)
+                self.del_data_at(r, c)
             else:
                 data.content = content
             is_mod = True
@@ -92,18 +92,19 @@ class NoteModel(QAbstractTableModel):
             if content == '':
                 pass
             else:
-                self.src_data.append(NoteData(index.row(), index.column(), content))
+                self.src_data.append(NoteData(r, c, content))
                 is_mod = True
 
         if is_mod:
+            index = self.index(r, c)
             self.dataChanged.emit(index, index)
 
-    def set_style_at(self, index, bgcolor = None, fgcolor = None):
-        style = self.style_at(index)
+    def set_style_at(self, r, c, bgcolor = None, fgcolor = None):
+        style = self.style_at(r, c)
         is_mod = False
         if style:
             if bgcolor is None and fgcolor is None:
-               self.del_style_at(index)
+               self.del_style_at(r, c)
             else:
                 style.bgcolor = bgcolor
                 style.fgcolor = fgcolor
@@ -112,31 +113,34 @@ class NoteModel(QAbstractTableModel):
             if bgcolor is None and fgcolor is None:
                 pass
             else:
-                self.src_data.append(StyleData(index.row(), index.column(), bgcolor, fgcolor))
+                self.src_data.append(StyleData(r, c, bgcolor, fgcolor))
                 is_mod = True
 
         if is_mod:
+            index = self.index(r, c)
             self.dataChanged.emit(index, index)
 
-    def del_data_at(self, index):
+    def del_data_at(self, r, c):
+        index = self.index(r, c)
         for i, e in enumerate(self.src_data):
-            if e.is_data() and e.is_at(index):
+            if e.is_data() and e.is_at(r, c):
                 del self.src_data[i]
                 self.dataChanged.emit(index, index)
                 return
 
-    def del_style_at(self, index):
+    def del_style_at(self, r, c):
+        index = self.index(r, c)
         for i, e in enumerate(self.src_data):
-            if not e.is_data() and e.is_at(index):
+            if not e.is_data() and e.is_at(r, c):
                 del self.src_data[i]
                 self.dataChanged.emit(index, index)
                 return
 
-    def has_data_at(self, index):
-        return self.data_at(index) is not None
+    def has_data_at(self, r, c):
+        return self.data_at(r, c) is not None
 
-    def has_style_at(self, index):
-        return self.style_at(index) is not None
+    def has_style_at(self, r, c):
+        return self.style_at(r, c) is not None
 
     def rowCount(self, parent: QModelIndex = ...):
         return self.max_row
@@ -518,7 +522,7 @@ class SetDataCommand(QUndoCommand):
         self.old_value = None
 
     def redo(self):
-        old_data = self.model.data_at(self.index)
+        old_data = self.model.data_at(self.index.row(), self.index.column())
         if old_data:
             self.old_value = old_data.content
         self.model.set_data_at(self.index, self.new_value)
@@ -554,7 +558,7 @@ class DeleteAllRowCommand(QUndoCommand):
         r = self.index.row()
         model = self.index.model()
         for c in range(model.columnCount()):
-            data = model.data_at(model.index(r, c))
+            data = model.data_at(r, c)
             if data:
                 self.deleted_data.append(data)
 

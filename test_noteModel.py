@@ -3,6 +3,13 @@ from grid_note import *
 
 
 class TestJobModel(TestCase):
+    def test_set_bgcolor(self):
+        src_data = [[None for c in range(10)] for r in range(10)]
+        model = NoteModel(src_data, None)
+
+        model.set_style_at(0, 0, Qt.red)
+        self.assertTrue(model.style_at(0, 0).bgcolor == Qt.red)
+
     def test_get_parent(self):
         src_data = [[None for c in range(10)] for r in range(10)]
         model = JobModel(src_data, None)

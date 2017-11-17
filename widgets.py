@@ -166,6 +166,15 @@ class SettingPane(QWidget):
         return self.map[key]
 
 
+class TestLineEdit(QLineEdit):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.textChanged.connect(self.debug_edit)
+
+    def debug_edit(self):
+        print('>>>>>>>>', self.text())
+
+
 class TestWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -173,12 +182,14 @@ class TestWindow(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        # layout = QHBoxLayout()
-        setting_ui = SettingPane(self)
-        setting_ui.show()
-        # setting_ui.move(0, 0)
-        # layout.addWidget(setting_ui)
-        # self.setLayout(layout)
+        # setting_ui = SettingPane(self)
+        # setting_ui.show()
+
+        layout = QHBoxLayout()
+        self.setLayout(layout)
+
+        lineedit = QLineEdit()
+        layout.addWidget(lineedit)
 
 
 if __name__ == '__main__':

@@ -507,7 +507,7 @@ class SetDataCommand(QUndoCommand):
         self.old_value = None
 
     def redo(self):
-        old_data = self.model.data_at(self.index)
+        old_data = self.model.data_at(self.index.row(), self.index.column())
         if old_data:
             self.old_value = old_data.content
         self.model.set_data_at(self.index, self.new_value)
@@ -543,7 +543,7 @@ class DeleteAllRowCommand(QUndoCommand):
         r = self.index.row()
         model = self.index.model()
         for c in range(model.columnCount()):
-            data = model.data_at(model.index(r, c))
+            data = model.data_at(r, c)
             if data:
                 self.deleted_data.append(data)
 

@@ -1,6 +1,5 @@
 # -*-coding:utf-8-*-
 
-import sys
 import typing
 import pickle
 import io
@@ -54,44 +53,48 @@ class NoteModel(QAbstractTableModel):
     def get_src_data(self):
         return self.src_data
 
-    def data_at(self, index):
-        return self.src_data[index.row()][index.column()]
+    def data_at(self, r, c):
+        return self.src_data[r][c]
 
-    def style_at(self, index):
-        return self.data_at(index)
+    def style_at(self, r, c):
+        return self.data_at(r, c)
 
-    def set_data_at(self, index, content):
-        self.src_data[index.row()][index.column()] = StyledNoteData(index.row(), index.column(), content)
+    def set_data_at(self, r, c, content):
+        self.src_data[r][c] = StyledNoteData(r, c, content)
+        index = self.index(r, c)
         self.dataChanged.emit(index, index)
 
-    def set_style_at(self, index, bgcolor = None):
-        d = self.data_at(index)
+    def set_style_at(self, r, c, bgcolor = None):
+        d = self.data_at(r, c)
         if d:
             d.bgcolor = bgcolor
         else:
-            self.src_style[index.row()][index.column()] = StyledNoteData(index.row(), index.column(), bgcolor = bgcolor)
+            self.src_data[r][c] = StyledNoteData(r, c, '', bgcolor)
+        index = self.index(r, c)
         self.dataChanged.emit(index, index)
 
-    def del_data_at(self, index):
-        self.src_data[index.row()][index.column()] = None
+    def del_data_at(self, r, c):
+        self.src_data[r][c] = None
+        index = self.index(r, c)
         self.dataChanged.emit(index, index)
 
-    def del_style_at(self, index):
-        d = self.data_at(index)
+    def del_style_at(self, r, c):
+        d = self.data_at(r, c)
         if not d:
             return
         else:
             if d.content:
                 d.bgcolor = None
             else:
-                self.del_data_at(index)
+                self.del_data_at(r, c)
+        index = self.index(4, c)
         self.dataChanged.emit(index, index)
 
-    def has_data_at(self, index):
-        return self.data_at(index) is not None
+    def has_data_at(self, r, c):
+        return self.data_at(r, c) is not None
 
-    def has_style_at(self, index):
-        return self.style_at(index) is not None
+    def has_style_at(self, r, c):
+        return self.style_at(r, c) is not None
 
     def rowCount(self, parent: QModelIndex = ...):
         return len(self.src_data)
@@ -103,7 +106,7 @@ class NoteModel(QAbstractTableModel):
         if not index.isValid():
             return QVariant()
 
-        data = self.data_at(index)
+        data = self.data_at(index.row(), index.column())
 
         if data:
             if role == Qt.DisplayRole:
@@ -122,9 +125,11 @@ class NoteModel(QAbstractTableModel):
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...):
         if index.isValid() and role == Qt.EditRole:
+            r = index.row()
+            c = index.column()
             if value == '':
-                if self.has_data_at(index):
-                    self.del_data_at(index)
+                if self.has_data_at(r, c):
+                    self.del_data_at(r, c)
                     return False
             cmd = SetDataCommand(index, value)
             self.undostack.push(cmd)
@@ -242,6 +247,8 @@ class JobModel(NoteModel):
         is_progressing = False
         for i in children_indexes:
             checker = self.rel_checker(i)
+            if checker in ('-', 'm'):
+                continue
             if checker != 'o':
                 is_all_complete = False
             if checker in ('o', '>'):
@@ -256,14 +263,14 @@ class JobModel(NoteModel):
         self.layoutChanged.emit()
 
     def checker(self, row):
-        return self.data_at(self.index(row, self.check_col)).content
+        return self.data_at(row, self.check_col).content
 
     def set_checker(self, row, checker = None):
         if checker:
             i = self.index(row, self.check_col)
-            self.set_data_at(self.index(row, self.check_col), checker)
+            self.set_data_at(row, self.check_col, checker)
         else:
-            self.del_data_at(self.index(row, self.check_col))
+            self.del_data_at(row, self.check_col)
 
         self.update_checker(self.parent_job_index(self.first_data_index_from_checker(row)))
 
@@ -275,7 +282,7 @@ class JobModel(NoteModel):
         return None
 
     def rel_checker(self, index):
-        data = self.data_at(self.index(index.row(), self.check_col))
+        data = self.data_at(index.row(), self.check_col)
         if data:
             return data.content
         else:
@@ -292,6 +299,7 @@ class NoteDataDelegate(QStyledItemDelegate):
 
     def createEditor(self, parent: QWidget, option: 'QStyleOptionViewItem', index: QModelIndex):
         return super(NoteDataDelegate, self).createEditor(parent, option, index)
+        # return TestLineEdit(parent)
 
     def setEditorData(self, editor: QWidget, index: QModelIndex):
         curr_content = index.data(Qt.EditRole) or index.data(Qt.DisplayRole)
@@ -324,13 +332,14 @@ class NoteDataDelegate(QStyledItemDelegate):
         # if self.is_checker_pos(index):
         #     painter.fillRect(option.rect, Qt.black)
 
-        if index.data():
-            # if index.data(Qt.BackgroundRole):
-            #     painter.fillRect(option.rect, index.data(Qt.BackgroundRole))
+        if index.data(Qt.BackgroundRole):
+            painter.fillRect(option.rect, index.data(Qt.BackgroundRole))
 
+        if index.data(Qt.DisplayRole):
+            content = index.data(Qt.DisplayRole)
             fm = QtGui.QFontMetrics(option.font)
             fh = fm.height() - fm.descent()
-            fw = fm.boundingRect(index.data()).width() + 10
+            fw = fm.boundingRect(content).width() + 10
             box_w = fw if fw > option.rect.width() else option.rect.width()
 
             text_rect = QRect(option.rect)
@@ -345,6 +354,10 @@ class NoteDataDelegate(QStyledItemDelegate):
             elif index.model().index(index.row(), check_col).data() == 'x':
                 painter.fillRect(text_rect, Qt.red)
                 painter.setPen(Qt.white)
+            elif index.model().rel_checker(index) == '-':
+                painter.fillRect(text_rect, Qt.yellow)
+            elif index.model().rel_checker(index) == 'm':
+                painter.fillRect(text_rect, Qt.cyan)
             elif index.model().index(index.row(), check_col).data() == None:
                 painter.fillRect(text_rect, self.color_blank)
 
@@ -453,10 +466,9 @@ class NoteDataView(NoteView):
         self.setCurrentIndex(self.model().index(cur.row() + 1, cur.column()))
 
 
-default_list_data = [[None for c in range(50)] for r in range(100)]
+default_list_data = [[None] * 100 for r in range(100)]
 
 
-# class MainWindow(QMainWindow, form_class):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -573,8 +585,8 @@ class MainWindow(QMainWindow):
 
         self.view.setFocus()
 
-    def show_settings(self):
-        self.setting_ui.show()
+    def toggle_show_settings(self):
+        self.setting_ui.setVisible(not self.setting_ui.isVisible())
 
     def keyPressEvent(self, e: QtGui.QKeyEvent):
         key = e.key()
@@ -633,8 +645,14 @@ class MainWindow(QMainWindow):
         elif key == 39 and mod == Qt.ControlModifier:
             self.model.set_checker(self.view.currentIndex().row(), 'x')
             e.accept()
+        elif key == Qt.Key_Minus and mod == Qt.ControlModifier:
+            self.model.set_checker(self.view.currentIndex().row(), '-')
+            e.accept()
+        elif key == Qt.Key_M and mod == Qt.ControlModifier:
+            self.model.set_checker(self.view.currentIndex().row(), 'm')
+            e.accept()
         elif key == Qt.Key_H and mod == Qt.ControlModifier:
-            self.show_settings()
+            self.toggle_show_settings()
             e.accept()
         else:
             e.ignore()
@@ -761,16 +779,16 @@ class MainWindow(QMainWindow):
     def set_bgcolor(self):
         color = QColorDialog.getColor()
         cur_i = self.view.currentIndex()
-        self.model.set_style_at(cur_i, color)
+        self.model.set_style_at(cur_i.row(), cur_i.column(), color)
         self.view.update(cur_i)
 
         for i in self.view.selectedIndexes():
-            self.model.set_style_at(i, color)
+            self.model.set_style_at(i.row(), i.column(), color)
             self.view.update(i)
 
     def clear_bgcolor(self):
         for i in self.view.selectedIndexes():
-            self.model.del_style_at(i)
+            self.model.del_style_at(i.row(), i.column())
             self.view.update(i)
 
     def copy_to_clipboard(self):
@@ -796,9 +814,9 @@ class MainWindow(QMainWindow):
             for c, t in enumerate(l):
                 i = self.model.index(cur_i.row() + r, cur_i.column() + c)
                 if t == '':
-                    self.model.del_data_at(i)
+                    self.model.del_data_at(i.row(), i.column())
                 else:
-                    self.model.set_data_at(i, t)
+                    self.model.set_data_at(i.row(), i.column(), t)
 
     def move_to_index(self, index):
         self.view.setCurrentIndex(index)
@@ -852,29 +870,31 @@ class SetDataCommand(QUndoCommand):
 
         self.model = index.model()
         self.index = index
+        self.r = index.row()
+        self.c = index.column()
         self.new_value = value
         self.old_value = None
 
     def redo(self):
-        old_data = self.model.data_at(self.index)
+        old_data = self.model.data_at(self.r, self.c)
         if old_data:
             self.old_value = old_data.content
         if self.index.column() == self.model.check_col:
             self.model.set_checker(self.index.row(), self.new_value)
         else:
-            self.model.set_data_at(self.index, self.new_value)
+            self.model.set_data_at(self.r, self.c, self.new_value)
 
     def undo(self):
         if self.old_value:
             if self.index.column() == self.model.check_col:
-                self.model.set_checker(self.index.row(), self.old_value)
+                self.model.set_checker(self.r, self.old_value)
             else:
-                self.model.set_data_at(self.index, self.old_value)
+                self.model.set_data_at(self.r, self.c, self.old_value)
         else:
             if self.index.column() == self.model.check_col:
-                self.model.set_checker(self.index.row())
+                self.model.set_checker(self.r)
             else:
-                self.model.del_data_at(self.index)
+                self.model.del_data_at(self.r, self.c)
 
 
 class DeleteCommand(QUndoCommand):
@@ -887,13 +907,13 @@ class DeleteCommand(QUndoCommand):
 
     def redo(self):
         for i in self.indexes:
-            d = self.model.data_at(i)
+            d = self.model.data_at(i.row(), i.column())
             if d:
                 self.deleted_data.append(d)
                 if i.column() == self.model.check_col:
                     self.model.set_checker(i.row(), None)
                 else:
-                    self.model.del_data_at(i)
+                    self.model.del_data_at(i.row(), i.column())
 
     def undo(self):
         for e in self.deleted_data:
@@ -932,7 +952,7 @@ class DeleteAllRowCommand(QUndoCommand):
         r = self.index.row()
         model = self.index.model()
         for c in range(model.columnCount()):
-            data = model.data_at(model.index(r, c))
+            data = model.data_at(r, c)
             if data:
                 self.deleted_data.append(data)
 
@@ -962,10 +982,10 @@ class InsertColumnCommand(QUndoCommand):
             r, cur_c = i.row(), i.column()
             for c in range(m.columnCount(), cur_c + 1, -1):
                 left_c = c - 1
-                left_d = m.data_at(m.index(r, left_c))
+                left_d = m.data_at(r, left_c)
                 if left_d:
                     m.set_data_at(m.index(r, c), left_d.content)
-                    self.inserted_data.append(m.data_at(m.index(r, c)))
+                    self.inserted_data.append(m.index(r, c))
                     m.del_data_at(m.index(r, left_c))
                     self.deleted_data.append(left_d)
         m.layoutChanged.emit()
@@ -996,16 +1016,16 @@ class DeleteColumnCommand(QUndoCommand):
         for i in self.indexes:
             r, cur_c = i.row(), i.column()
             for c in range(cur_c, m.columnCount()):
-                d = m.data_at(m.index(r, c))
+                d = m.data_at(r, c)
                 right_c = c + 1
-                right_d = m.data_at(m.index(r, right_c))
+                right_d = m.data_at(r, right_c)
                 if d:
                     self.deleted_data.append(d)
                     m.del_data_at(m.index(r, c))
                     pass
                 if right_d:
                     m.set_data_at(m.index(r, c), right_d.content)
-                    self.inserted_data.append(m.data_at(m.index(r, c)))
+                    self.inserted_data.append(m.data_at(r, c))
                     m.del_data_at(m.index(r, right_c))
                     self.deleted_data.append(right_d)
                 else:
