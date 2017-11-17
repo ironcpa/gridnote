@@ -289,183 +289,6 @@ class JobModel(NoteModel):
             return None
 
 
-class NoteDataDelegate(QStyledItemDelegate):
-    def __init__(self):
-        super().__init__()
-
-        self.color_complete = Qt.green
-        self.color_blank = QtGui.QColor(230, 230, 230)
-        self.color_end = Qt.darkCyan
-
-    def createEditor(self, parent: QWidget, option: 'QStyleOptionViewItem', index: QModelIndex):
-        return super(NoteDataDelegate, self).createEditor(parent, option, index)
-        # return TestLineEdit(parent)
-
-    def setEditorData(self, editor: QWidget, index: QModelIndex):
-        curr_content = index.data(Qt.EditRole) or index.data(Qt.DisplayRole)
-        editor.setText(curr_content)
-
-    def has_left_data(self, index):
-        for c in range(index.column()-1, index.model().check_col, -1):
-            if index.model().index(index.row(), c).data():
-                return True
-        return False
-
-    def is_checker_pos(self, index):
-        if index.column() <= index.model().check_col:
-            return False
-        r_index = index.model().index(index.row(), index.column() + 1)
-        if r_index.data() and not self.has_left_data(index):
-            return True
-        return False
-
-    def paint(self, painter: QtGui.QPainter, option: 'QStyleOptionViewItem', index: QModelIndex):
-        if index.row() == index.model().rowCount() - 1 \
-                or index.column() == index.model().columnCount() - 1:
-            painter.fillRect(option.rect, self.color_end)
-        if index.column() == index.model().check_col:
-            painter.fillRect(option.rect, Qt.black)
-        if index.row() == 0:
-            painter.fillRect(option.rect, Qt.yellow)
-
-        # # test : checker on left of data
-        # if self.is_checker_pos(index):
-        #     painter.fillRect(option.rect, Qt.black)
-
-        if index.data(Qt.BackgroundRole):
-            painter.fillRect(option.rect, index.data(Qt.BackgroundRole))
-
-        if index.data(Qt.DisplayRole):
-            content = index.data(Qt.DisplayRole)
-            fm = QtGui.QFontMetrics(option.font)
-            fh = fm.height() - fm.descent()
-            fw = fm.boundingRect(content).width() + 10
-            box_w = fw if fw > option.rect.width() else option.rect.width()
-
-            text_rect = QRect(option.rect)
-            text_rect.setWidth(box_w)
-            o_pen = painter.pen()
-            check_col = index.model().check_col
-            if index.model().index(index.row(), check_col).data() == 'o':
-                painter.fillRect(text_rect, self.color_complete)
-            elif index.model().index(index.row(), check_col).data() == '>':
-                painter.fillRect(text_rect, Qt.blue)
-                painter.setPen(Qt.white)
-            elif index.model().index(index.row(), check_col).data() == 'x':
-                painter.fillRect(text_rect, Qt.red)
-                painter.setPen(Qt.white)
-            elif index.model().rel_checker(index) == '-':
-                painter.fillRect(text_rect, Qt.yellow)
-            elif index.model().rel_checker(index) == 'm':
-                painter.fillRect(text_rect, Qt.cyan)
-            elif index.model().index(index.row(), check_col).data() == None:
-                painter.fillRect(text_rect, self.color_blank)
-
-            if option.state & QStyle.State_Selected:
-                painter.fillRect(option.rect, option.palette.highlight())
-
-            # fm = QtGui.QFontMetrics(option.font)
-            # fh = fm.height() - fm.descent()
-            painter.drawText(option.rect.x(), option.rect.y() + fh, index.data())
-            # fw = fm.boundingRect(index.data()).width()
-            # # sample cancel line
-            # painter.drawLine(QPoint(option.rect.x(), option.rect.y() + 20), QPoint(option.rect.x() + fw, option.rect.y() + 20))
-
-            painter.setPen(o_pen)
-        else:
-            # # don't know why this is needed. to avoid automatically fill rect with styledata in super
-            # if index.data(Qt.BackgroundRole):
-            #     return
-            QStyledItemDelegate.paint(self, painter, option, index)
-
-
-class NoteStyleDelegate(QStyledItemDelegate):
-    def __init__(self):
-        super().__init__()
-
-    def paint(self, painter: QtGui.QPainter, option: 'QStyleOptionViewItem', index: QModelIndex):
-        if index.data():
-            if index.data(Qt.BackgroundRole):
-                painter.fillRect(option.rect, index.data(Qt.BackgroundRole))
-        else:
-            QStyledItemDelegate.paint(self, painter, option, index)
-
-
-class NoteView(QTableView):
-    def __init__(self):
-        super().__init__()
-        self.row_h = 0
-        self.col_w = 0
-
-    def set_cell_size(self, w, h):
-        self.row_h = h
-        self.col_w = w
-
-    def setModel(self, model: QAbstractItemModel):
-        super(NoteView, self).setModel(model)
-        self.apply_cell_size()
-
-    def apply_cell_size(self):
-        for r in range(self.model().rowCount()):
-            self.setRowHeight(r, self.row_h)
-        for c in range(self.model().columnCount()):
-            self.setColumnWidth(c, self.col_w)
-
-
-class NoteDataView(NoteView):
-    def __init__(self):
-        super().__init__()
-
-    def keyPressEvent(self, e: QtGui.QKeyEvent):
-        key = e.key()
-        mods = QApplication.keyboardModifiers()
-        if key == Qt.Key_Return:
-            if mods == Qt.ControlModifier:
-                self.enter_edit_mode()
-            elif mods == Qt.ShiftModifier:
-                self.move_to_prev_row()
-            else:
-                self.move_to_next_row()
-            e.accept()
-        # ignore keys
-        elif key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right) and mods == Qt.ControlModifier:
-            e.ignore()
-        elif key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right) and \
-                mods == Qt.ControlModifier | Qt.ShiftModifier:
-            e.ignore()
-        elif key in (Qt.Key_Delete,):
-            e.ignore()
-        else:
-            super(NoteView, self).keyPressEvent(e)
-
-    def currentChanged(self, current: QModelIndex, previous: QModelIndex):
-        r = previous.row()
-        for c in range(self.model().columnCount()):
-            i = self.model().index(r, c)
-            if self.model().data(i):
-                self.update(i)
-        super().currentChanged(current, previous)
-
-    def set_cell_font_size(self, font_size):
-        fs = int(font_size) if font_size.isdigit() else 0
-
-        if fs > 0:
-            view_font = QtGui.QFont()
-            view_font.setPointSize(fs)
-            self.setFont(view_font)
-
-    def enter_edit_mode(self):
-        self.edit(self.currentIndex())
-
-    def move_to_prev_row(self):
-        cur = self.currentIndex()
-        self.setCurrentIndex(self.model().index(cur.row() - 1, cur.column()))
-
-    def move_to_next_row(self):
-        cur = self.currentIndex()
-        self.setCurrentIndex(self.model().index(cur.row() + 1, cur.column()))
-
-
 default_list_data = [[None] * 100 for r in range(100)]
 
 
@@ -475,11 +298,10 @@ class MainWindow(QMainWindow):
         self.setup_ui()
         self.init_focus_policy()
         self.init_signal_slots()
+        self.init_view_settings()
 
         self.undostack = QUndoStack()
         self.curr_path = None
-
-        self.init_views()
 
         self.open_last_file()
 
@@ -522,44 +344,25 @@ class MainWindow(QMainWindow):
         gridlayout.addWidget(self.txt_path, 1, 0)
         gridlayout.addLayout(buttonlayout, 2, 0)
 
-        self.top_view = NoteDataView()
-        self.top_view.horizontalScrollBar().setVisible(False)
-        self.top_view.verticalScrollBar().setVisible(False)
-        # self.top_view.verticalHeader().setVisible(False)
-        self.top_view.setMaximumHeight(100)
-        # self.top_view.setStyleSheet('QTableView:item {background: yellow}')
-        gridlayout.addWidget(self.top_view, 3, 0)
+        self.tab_notes = QTabWidget()
+        gridlayout.addWidget(self.tab_notes, 3, 0)
 
-        self.view = NoteDataView()
-        self.view.horizontalHeader().setVisible(False)
-        # self.view.verticalHeader().setVisible(False)
-        gridlayout.addWidget(self.view, 4, 0)
+        self.base_view = SplitTableView()
+        self.tab_notes.addTab(self.base_view, 'note 1')
 
         self.setting_ui = SettingPane(self.centralWidget())
         self.setting_ui.hide()
 
-    def init_views(self):
-        data_delegate = NoteDataDelegate()
-        style_delegate = NoteStyleDelegate()
-
-        self.top_view.setItemDelegate(data_delegate)
-        self.top_view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
-        self.top_view.set_cell_font_size(self.txt_cell_font_size.text())
-
-        self.view.setItemDelegate(data_delegate)
-        self.view.setShowGrid(False)
-        self.view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
-        self.view.set_cell_font_size(self.txt_cell_font_size.text())
-
-        self.view.horizontalScrollBar().valueChanged.connect(self.sync_hscroll)
-        self.view.verticalScrollBar().valueChanged.connect(self.sync_vscroll)
+    def init_view_settings(self):
+        self.base_view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
+        self.base_view.set_cell_font_size(self.txt_cell_font_size.text())
 
     def init_signal_slots(self):
         self.txt_row_count.return_pressed.connect(self.update_model_row_count)
         self.txt_col_count.return_pressed.connect(self.update_model_col_count)
         self.txt_cell_width.return_pressed.connect(self.set_all_column_width)
         self.txt_cell_height.return_pressed.connect(self.set_all_row_height)
-        self.txt_cell_font_size.return_pressed.connect(self.view.set_cell_font_size)
+        self.txt_cell_font_size.return_pressed.connect(self.base_view.set_cell_font_size)
         self.btn_open.clicked.connect(self.open)
         self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
         self.btn_save_as.clicked.connect(lambda state: self.save())
@@ -570,20 +373,13 @@ class MainWindow(QMainWindow):
     def open_last_file(self):
         self.open(co.load_settings('last_file'))
 
-    def sync_hscroll(self, value):
-        self.top_view.horizontalScrollBar().setValue(value)
-
-    def sync_vscroll(self, value):
-        pass
-
     def init_focus_policy(self):
         self.txt_cell_width.setFocusPolicy(Qt.ClickFocus)
         self.txt_cell_height.setFocusPolicy(Qt.ClickFocus)
         self.txt_cell_font_size.setFocusPolicy(Qt.ClickFocus)
         self.txt_path.setFocusPolicy(Qt.NoFocus)
-        self.top_view.setFocusPolicy(Qt.NoFocus)
 
-        self.view.setFocus()
+        self.base_view.setFocus()
 
     def toggle_show_settings(self):
         self.setting_ui.setVisible(not self.setting_ui.isVisible())
@@ -634,22 +430,22 @@ class MainWindow(QMainWindow):
                 and mod == Qt.ControlModifier | Qt.ShiftModifier:
             self.move_to_end(key)
         elif key == Qt.Key_Period and mod == Qt.ControlModifier:
-            self.model.set_checker(self.view.currentIndex().row(), '>')
+            self.model.set_checker(self.base_view.curr_row(), '>')
             e.accept()
         elif key == Qt.Key_Comma and mod == Qt.ControlModifier:
-            self.model.set_checker(self.view.currentIndex().row())
+            self.model.set_checker(self.base_view.curr_row())
             e.accept()
         elif key == Qt.Key_Slash and mod == Qt.ControlModifier:
-            self.model.set_checker(self.view.currentIndex().row(), 'o')
+            self.model.set_checker(self.base_view.curr_row(), 'o')
             e.accept()
         elif key == 39 and mod == Qt.ControlModifier:
-            self.model.set_checker(self.view.currentIndex().row(), 'x')
+            self.model.set_checker(self.base_view.curr_row(), 'x')
             e.accept()
         elif key == Qt.Key_Minus and mod == Qt.ControlModifier:
-            self.model.set_checker(self.view.currentIndex().row(), '-')
+            self.model.set_checker(self.base_view.curr_row(), '-')
             e.accept()
         elif key == Qt.Key_M and mod == Qt.ControlModifier:
-            self.model.set_checker(self.view.currentIndex().row(), 'm')
+            self.model.set_checker(self.base_view.curr_row(), 'm')
             e.accept()
         elif key == Qt.Key_H and mod == Qt.ControlModifier:
             self.toggle_show_settings()
@@ -659,8 +455,8 @@ class MainWindow(QMainWindow):
             super().keyPressEvent(e)
 
     def closeEvent(self, e: QtGui.QCloseEvent):
-        co.save_settings('last_row', self.view.currentIndex().row())
-        co.save_settings('last_col', self.view.currentIndex().column())
+        co.save_settings('last_row', self.base_view.curr_row())
+        co.save_settings('last_col', self.base_view.curr_col())
 
     def load_model_from_file(self, path):
         if not path:
@@ -676,7 +472,7 @@ class MainWindow(QMainWindow):
     def update_model_row_count(self, count):
         ok = self.model.change_row_count(int(count))
         if ok:
-            self.view.apply_cell_size()
+            self.base_view.apply_cell_size()
         else:
             QMessageBox.warning(self, 'fail', 'some row has data')
 
@@ -688,19 +484,18 @@ class MainWindow(QMainWindow):
         w = int(width) if width.isdigit() else 0
         if w > 0 and w <= 100:
             for c in range(self.model.columnCount()):
-                self.view.setColumnWidth(c, w)
+                self.base_view.set_column_width(c, w)
                 self.top_view.setColumnWidth(c, w)
 
     def set_all_row_height(self, height):
         h = int(height) if height.isdigit() else 0
         if h > 0 and h <= 100:
             for r in range(self.model.rowCount()):
-                self.view.setRowHeight(r, h)
-                self.top_view.setRowHeight(r, h)
+                self.base_view.set_row_height(r, h)
 
     def move_to_last_index(self):
         last_index = self.model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
-        self.view.setCurrentIndex(last_index)
+        self.base_view.set_curr_index(last_index)
 
     def show_model_row_col(self):
         self.txt_row_count.set_text(self.model.rowCount())
@@ -717,8 +512,7 @@ class MainWindow(QMainWindow):
             self.curr_path = path
             co.save_settings('last_file', self.curr_path)
 
-            self.view.setModel(self.model)
-            self.top_view.setModel(self.model)
+            self.base_view.set_model(self.model)
 
             self.move_to_last_index()
             self.show_model_row_col()
@@ -742,8 +536,7 @@ class MainWindow(QMainWindow):
 
     def create_new(self):
         self.model = JobModel(default_list_data, self.undostack)
-        self.view.setModel(self.model)
-        self.top_view.setModel(self.model)
+        self.base_view.set_model(self.model)
         self.show_model_row_col()
 
     def save_ui_settings(self):
@@ -752,47 +545,47 @@ class MainWindow(QMainWindow):
         co.save_settings('cell_font_size', int(self.txt_cell_font_size.text()))
 
     def delete_selected(self):
-        cmd = DeleteCommand(self.view.selectionModel().selectedIndexes())
+        cmd = DeleteCommand(self.base_view.selected_indexes())
         self.undostack.push(cmd)
-        # indexes = self.view.selectionModel().selectedIndexes()
+        # indexes = self.base_view.selected_indexes()
         # for i in indexes:
         #     self.model.del_data_at(i)
 
     def insert_all_row(self, insert_below = False):
-        cur_i = self.view.currentIndex()
-        cmd = InsertAllRowCommand(cur_i, insert_below, self.view)
+        cur_i = self.base_view.curr_index()
+        cmd = InsertAllRowCommand(cur_i, insert_below, self.base_view)
         self.undostack.push(cmd)
 
     def delete_all_row(self):
-        cur_i = self.view.currentIndex()
+        cur_i = self.base_view.curr_index()
         cmd = DeleteAllRowCommand(cur_i)
         self.undostack.push(cmd)
 
     def insert_sel_col(self):
-        cmd = InsertColumnCommand(self.view.selectedIndexes())
+        cmd = InsertColumnCommand(self.base_view.selected_indexes())
         self.undostack.push(cmd)
 
     def delete_sel_col(self):
-        cmd = DeleteColumnCommand(self.view.selectedIndexes())
+        cmd = DeleteColumnCommand(self.base_view.selected_indexes())
         self.undostack.push(cmd)
 
     def set_bgcolor(self):
         color = QColorDialog.getColor()
-        cur_i = self.view.currentIndex()
+        cur_i = self.base_view.curr_index()
         self.model.set_style_at(cur_i.row(), cur_i.column(), color)
-        self.view.update(cur_i)
+        self.base_view.update(cur_i)
 
-        for i in self.view.selectedIndexes():
+        for i in self.base_view.selected_indexes():
             self.model.set_style_at(i.row(), i.column(), color)
-            self.view.update(i)
+            self.base_view.update(i)
 
     def clear_bgcolor(self):
-        for i in self.view.selectedIndexes():
+        for i in self.base_view.selected_indexes():
             self.model.del_style_at(i.row(), i.column())
-            self.view.update(i)
+            self.base_view.update(i)
 
     def copy_to_clipboard(self):
-        selections = self.view.selectedIndexes()
+        selections = self.base_view.selected_indexes()
         if selections:
             rows = sorted(i.row() for i in selections)
             cols = sorted(i.column() for i in selections)
@@ -809,7 +602,7 @@ class MainWindow(QMainWindow):
 
     def paste_from_clipboard(self):
         text = QApplication.clipboard().text()
-        cur_i = self.view.currentIndex()
+        cur_i = self.base_view.curr_index()
         for r, l in enumerate(csv.reader(text.split('\n'))):
             for c, t in enumerate(l):
                 i = self.model.index(cur_i.row() + r, cur_i.column() + c)
@@ -819,33 +612,33 @@ class MainWindow(QMainWindow):
                     self.model.set_data_at(i.row(), i.column(), t)
 
     def move_to_index(self, index):
-        self.view.setCurrentIndex(index)
-        self.view.selectionModel().select(index, QItemSelectionModel.ClearAndSelect)
+        self.base_view.set_curr_index(index)
+        self.base_view.select(index, QItemSelectionModel.ClearAndSelect)
 
     def move_to_first_data(self, key):
         if key == Qt.Key_Up:
-            cur_i = self.view.currentIndex()
+            cur_i = self.base_view.curr_index()
             for r in range(cur_i.row() - 1, 0, -1):
                 i = self.model.index(r, cur_i.column())
                 if i.data():
                     self.move_to_index(i)
                     return
         elif key == Qt.Key_Down:
-            cur_i = self.view.currentIndex()
+            cur_i = self.base_view.curr_index()
             for r in range(cur_i.row() + 1, self.model.rowCount()):
                 i = self.model.index(r, cur_i.column())
                 if i.data():
                     self.move_to_index(i)
                     return
         elif key == Qt.Key_Left:
-            cur_i = self.view.currentIndex()
+            cur_i = self.base_view.curr_index()
             for c in range(cur_i.column() - 1, 0, -1):
                 i = self.model.index(cur_i.row(), c)
                 if i.data():
                     self.move_to_index(i)
                     return
         elif key == Qt.Key_Right:
-            cur_i = self.view.currentIndex()
+            cur_i = self.base_view.curr_index()
             for c in range(cur_i.column() + 1, self.model.columnCount()):
                 i = self.model.index(cur_i.row(), c)
                 if i.data():
@@ -853,7 +646,7 @@ class MainWindow(QMainWindow):
                     return
 
     def move_to_end(self, key):
-        cur_i = self.view.currentIndex()
+        cur_i = self.base_view.curr_index()
         if key == Qt.Key_Up:
             self.move_to_index(self.model.index(0, cur_i.column()))
         elif key == Qt.Key_Down:
@@ -930,12 +723,12 @@ class InsertAllRowCommand(QUndoCommand):
 
         self.index = index if not insert_below else index.model().index(index.row() + 1, index.column())
         self.insert_below = insert_below
-        self.view = view
+        self.base_view = view
 
     def redo(self):
         self.index.model().insert_all_row(self.index)
-        if self.insert_below and self.view:
-            self.view.setCurrentIndex(self.index)
+        if self.insert_below and self.base_view:
+            self.base_view.set_curr_index(self.index)
 
     def undo(self):
         self.index.model().delete_all_row(self.index)
