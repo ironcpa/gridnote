@@ -379,7 +379,7 @@ class MainWindow(QMainWindow):
         self.txt_cell_font_size.setFocusPolicy(Qt.ClickFocus)
         self.txt_path.setFocusPolicy(Qt.NoFocus)
 
-        self.base_view.setFocus()
+        self.base_view.give_focus()
 
     def toggle_show_settings(self):
         self.setting_ui.setVisible(not self.setting_ui.isVisible())
@@ -713,7 +713,7 @@ class DeleteCommand(QUndoCommand):
             if e.c == self.model.check_col:
                 self.model.set_checker(e.r, e.content)
             else:
-                self.model.set_data_at(self.model.index(e.r, e.c), e.content)
+                self.model.set_data_at(e.r, e.c, e.content)
         self.deleted_data.clear()
 
 
@@ -756,7 +756,7 @@ class DeleteAllRowCommand(QUndoCommand):
 
         model = self.index.model()
         for e in self.deleted_data:
-            model.set_data_at(model.index(e.r, e.c), e.content)
+            model.set_data_at(e.r, e.c, e.content)
         self.deleted_data.clear()
 
 
@@ -777,18 +777,18 @@ class InsertColumnCommand(QUndoCommand):
                 left_c = c - 1
                 left_d = m.data_at(r, left_c)
                 if left_d:
-                    m.set_data_at(m.index(r, c), left_d.content)
-                    self.inserted_data.append(m.index(r, c))
-                    m.del_data_at(m.index(r, left_c))
+                    m.set_data_at(r, c, left_d.content)
+                    self.inserted_data.append(m.data_at(r, c))
+                    m.del_data_at(r, left_c)
                     self.deleted_data.append(left_d)
         m.layoutChanged.emit()
 
     def undo(self):
         m = self.model
         for e in self.inserted_data:
-            self.model.del_data_at(m.index(e.r, e.c))
+            self.model.del_data_at(e.r, e.c)
         for e in self.deleted_data:
-            self.model.set_data_at(m.index(e.r, e.c), e.content)
+            self.model.set_data_at(e.r, e.c, e.content)
 
         self.inserted_data.clear()
         self.deleted_data.clear()
@@ -814,23 +814,23 @@ class DeleteColumnCommand(QUndoCommand):
                 right_d = m.data_at(r, right_c)
                 if d:
                     self.deleted_data.append(d)
-                    m.del_data_at(m.index(r, c))
+                    m.del_data_at(r, c)
                     pass
                 if right_d:
-                    m.set_data_at(m.index(r, c), right_d.content)
+                    m.set_data_at(r, c, right_d.content)
                     self.inserted_data.append(m.data_at(r, c))
-                    m.del_data_at(m.index(r, right_c))
+                    m.del_data_at(r, right_c)
                     self.deleted_data.append(right_d)
                 else:
-                    m.del_data_at(m.index(r, c))
+                    m.del_data_at(r, c)
         m.layoutChanged.emit()
 
     def undo(self):
         m = self.model
         for e in self.inserted_data:
-            self.model.del_data_at(m.index(e.r, e.c))
+            self.model.del_data_at(e.r, e.c)
         for e in self.deleted_data:
-            self.model.set_data_at(m.index(e.r, e.c), e.content)
+            self.model.set_data_at(e.r, e.c, e.content)
 
         self.inserted_data.clear()
         self.deleted_data.clear()

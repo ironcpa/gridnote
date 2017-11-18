@@ -277,6 +277,8 @@ class SplitTableView(QWidget):
 
     def init_focus_policy(self):
         self.top_view.setFocusPolicy(Qt.NoFocus)
+
+    def give_focus(self):
         self.data_view.setFocus()
 
     def sync_hscroll(self, value):
