@@ -440,6 +440,45 @@ class NoteStyleDelegate(QStyledItemDelegate):
             QStyledItemDelegate.paint(self, painter, option, index)
 
 
+class EditableTabBar(QTabBar):
+    def __init__(self, parent):
+        QTabBar.__init__(self, parent)
+        self._editor = QLineEdit(self)
+        self._editor.setWindowFlags(Qt.Popup)
+        '''augie : i don't know what the focusproxy is. original code has it'''
+        # self._editor.setFocusProxy(self)
+        self._editor.editingFinished.connect(self.handleEditingFinished)
+        self._editor.installEventFilter(self)
+
+    def eventFilter(self, widget, event):
+        if ((event.type() == QEvent.MouseButtonPress and
+             not self._editor.geometry().contains(event.globalPos())) or
+            (event.type() == QEvent.KeyPress and
+             event.key() == Qt.Key_Escape)):
+            self._editor.hide()
+            return True
+        return QTabBar.eventFilter(self, widget, event)
+
+    def mouseDoubleClickEvent(self, event):
+        index = self.tabAt(event.pos())
+        if index >= 0:
+            self.editTab(index)
+
+    def editTab(self, index):
+        rect = self.tabRect(index)
+        self._editor.setFixedSize(rect.size())
+        self._editor.move(self.parent().mapToGlobal(rect.topLeft()))
+        self._editor.setText(self.tabText(index))
+        if not self._editor.isVisible():
+            self._editor.show()
+            self._editor.setCursorPosition(len(self.tabText(index)) - 1)
+
+    def handleEditingFinished(self):
+        index = self.currentIndex()
+        if index >= 0:
+            self._editor.hide()
+
+
 class TestLineEdit(QLineEdit):
     def __init__(self, parent):
         super().__init__(parent)
@@ -466,6 +505,7 @@ class TestWindow(QWidget):
         layout.addWidget(lineedit)
 
         tab = QTabWidget()
+        tab.setTabBar(EditableTabBar(self))
         tab_content1 = QWidget()
         tab_content2 = QWidget()
         split_view = SplitTableView()
@@ -477,7 +517,15 @@ class TestWindow(QWidget):
         layout.addWidget(tab)
 
 
+def catch_exceptions(self, t, val, tb):
+    QMessageBox.critical(None, 'exception', '{}'.format(t))
+    old_hook(t, val, tb)
+
+
 if __name__ == '__main__':
+    old_hook = sys.excepthook
+    sys.excepthook = catch_exceptions
+
     app = QApplication(sys.argv)
 
     test_window = TestWindow()

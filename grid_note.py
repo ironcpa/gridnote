@@ -358,6 +358,7 @@ class MainWindow(QMainWindow):
         gridlayout.addLayout(buttonlayout, 2, 0)
 
         self.tab_notes = QTabWidget()
+        self.tab_notes.setTabBar(EditableTabBar(self))
         gridlayout.addWidget(self.tab_notes, 3, 0)
 
         self.setting_ui = SettingPane(self.centralWidget())
@@ -485,6 +486,10 @@ class MainWindow(QMainWindow):
             else:
                 return False
 
+    def set_cur_view(self, view):
+        self.cur_view = view
+        self.cur_model = view.model()
+
     def add_view(self, page_name, model):
         view = SplitTableView(page_name)
         self.views.append(view)
@@ -511,7 +516,7 @@ class MainWindow(QMainWindow):
                 self.add_view(page_name, model)
 
             if len(self.views) > 0:
-                self.cur_view = self.views[0]
+                self.set_cur_view(self.views[0])
                 self.cur_view.give_focus()
             self.cur_page_name = self.models[0][0]
             self.cur_model = self.models[0][1]
@@ -562,7 +567,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, 'open', "couldn't find file")
 
     def make_save_object(self):
-        return [(v.page_name, v.model().get_src_data()) for v in self.views]
+        return [(self.tab_notes.tabText(i), v.model().get_src_data()) for i, v in enumerate(self.views)]
 
     def save(self, path = None):
         is_new_save = path is None
@@ -651,7 +656,7 @@ class MainWindow(QMainWindow):
         self.models.append(model)
 
         '''new view as current'''
-        self.cur_view = view
+        self.set_cur_view(view)
         self.tab_notes.setCurrentWidget(view)
 
     def copy_to_clipboard(self):
