@@ -37,6 +37,13 @@ class StyledNoteData(NoteData):
         self.bgcolor = bgcolor
 
 
+default_list_data = [[None] * 100 for r in range(100)]
+default_tabbed_data = [('default', [[None] * 50 for r in range(100)])]
+test_tabbed_data = [('1st page', [[None] * 50 for r in range(100)]),
+                    ('2nd page', [[None] * 50 for r in range(100)])]
+test_tabbed_data[0][1][0][0] = StyledNoteData(0, 0, 'aaa')
+
+
 class NoteModel(QAbstractTableModel):
     def __init__(self, src_data, undostack):
         super().__init__()
@@ -289,21 +296,24 @@ class JobModel(NoteModel):
             return None
 
 
-default_list_data = [[None] * 100 for r in range(100)]
-
-
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, load_last_file = True):
         super().__init__()
+
+        self.cur_model = None
+        self.cur_page_name = ''
+        self.cur_view = None
+
         self.setup_ui()
         self.init_focus_policy()
         self.init_signal_slots()
-        self.init_view_settings()
+        # self.init_view_settings()
 
         self.undostack = QUndoStack()
         self.curr_path = None
 
-        self.open_last_file()
+        if load_last_file:
+            self.open_last_file()
 
     def setup_ui(self):
         self.setGeometry(100, 100, 800, 600)
@@ -347,22 +357,26 @@ class MainWindow(QMainWindow):
         self.tab_notes = QTabWidget()
         gridlayout.addWidget(self.tab_notes, 3, 0)
 
-        self.base_view = SplitTableView()
-        self.tab_notes.addTab(self.base_view, 'note 1')
+        # self.base_view = SplitTableView()
+        # self.tab_notes.addTab(self.base_view, 'note 1')
+        # '''todo this is temp setup for single model'''
+        # self.views = []
+        # self.views.append(self.base_view)
+        self.views = []
 
         self.setting_ui = SettingPane(self.centralWidget())
         self.setting_ui.hide()
 
-    def init_view_settings(self):
-        self.base_view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
-        self.base_view.set_cell_font_size(self.txt_cell_font_size.text())
+    def init_view_settings(self, view):
+        view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
+        view.set_cell_font_size(self.txt_cell_font_size.text())
 
     def init_signal_slots(self):
         self.txt_row_count.return_pressed.connect(self.update_model_row_count)
         self.txt_col_count.return_pressed.connect(self.update_model_col_count)
         self.txt_cell_width.return_pressed.connect(self.set_all_column_width)
         self.txt_cell_height.return_pressed.connect(self.set_all_row_height)
-        self.txt_cell_font_size.return_pressed.connect(self.base_view.set_cell_font_size)
+        # self.txt_cell_font_size.return_pressed.connect(self.base_view.set_cell_font_size)
         self.btn_open.clicked.connect(self.open)
         self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
         self.btn_save_as.clicked.connect(lambda state: self.save())
@@ -378,8 +392,6 @@ class MainWindow(QMainWindow):
         self.txt_cell_height.setFocusPolicy(Qt.ClickFocus)
         self.txt_cell_font_size.setFocusPolicy(Qt.ClickFocus)
         self.txt_path.setFocusPolicy(Qt.NoFocus)
-
-        self.base_view.give_focus()
 
     def toggle_show_settings(self):
         self.setting_ui.setVisible(not self.setting_ui.isVisible())
@@ -430,22 +442,22 @@ class MainWindow(QMainWindow):
                 and mod == Qt.ControlModifier | Qt.ShiftModifier:
             self.move_to_end(key)
         elif key == Qt.Key_Period and mod == Qt.ControlModifier:
-            self.model.set_checker(self.base_view.curr_row(), '>')
+            self.cur_model.set_checker(self.base_view.curr_row(), '>')
             e.accept()
         elif key == Qt.Key_Comma and mod == Qt.ControlModifier:
-            self.model.set_checker(self.base_view.curr_row())
+            self.cur_model.set_checker(self.base_view.curr_row())
             e.accept()
         elif key == Qt.Key_Slash and mod == Qt.ControlModifier:
-            self.model.set_checker(self.base_view.curr_row(), 'o')
+            self.cur_model.set_checker(self.base_view.curr_row(), 'o')
             e.accept()
         elif key == 39 and mod == Qt.ControlModifier:
-            self.model.set_checker(self.base_view.curr_row(), 'x')
+            self.cur_model.set_checker(self.base_view.curr_row(), 'x')
             e.accept()
         elif key == Qt.Key_Minus and mod == Qt.ControlModifier:
-            self.model.set_checker(self.base_view.curr_row(), '-')
+            self.cur_model.set_checker(self.base_view.curr_row(), '-')
             e.accept()
         elif key == Qt.Key_M and mod == Qt.ControlModifier:
-            self.model.set_checker(self.base_view.curr_row(), 'm')
+            self.cur_model.set_checker(self.base_view.curr_row(), 'm')
             e.accept()
         elif key == Qt.Key_H and mod == Qt.ControlModifier:
             self.toggle_show_settings()
@@ -455,68 +467,93 @@ class MainWindow(QMainWindow):
             super().keyPressEvent(e)
 
     def closeEvent(self, e: QtGui.QCloseEvent):
-        co.save_settings('last_row', self.base_view.curr_row())
-        co.save_settings('last_col', self.base_view.curr_col())
+        co.save_settings('last_row', self.cur_view.curr_row())
+        co.save_settings('last_col', self.cur_view.curr_col())
 
     def load_model_from_file(self, path):
         if not path:
-            return None
+            return False
 
         if not os.path.exists(path):
-            return None
+            return False
 
         with open(path, 'rb') as f:
-            model = JobModel(pickle.load(f), self.undostack)
-            return model
+            if self.load_models(pickle.load(f)):
+                self.txt_path.setText(path)
+                self.curr_path = path
+                co.save_settings('last_file', self.curr_path)
+                return True
+            else:
+                return False
+
+    def load_models(self, data):
+        models = []
+        if type(data[0][0]) is StyledNoteData:
+            models.append(('default', JobModel(data, self.undostack)))
+        else:
+            for page_name, page_data in data:
+                models.append((page_name, JobModel(page_data, self.undostack)))
+
+        if len(models) > 0:
+            self.models = models
+            # self.base_view.set_model(self.models[0][1])
+
+            for page_name, model in models:
+                view = SplitTableView()
+                view.set_model(model)
+                self.views.append(view)
+                self.tab_notes.addTab(view, page_name)
+                self.txt_cell_font_size.return_pressed.connect(view.set_cell_font_size)
+                self.init_view_settings(view)
+            if len(self.views) > 0:
+                self.cur_view = self.views[0]
+                self.cur_view.give_focus()
+
+            self.cur_page_name = self.models[0][0]
+            self.cur_model = self.models[0][1]
+            self.move_to_last_index()
+            self.show_model_row_col()
+            return True
+        else:
+            return False
 
     def update_model_row_count(self, count):
-        ok = self.model.change_row_count(int(count))
+        ok = self.cur_model.change_row_count(int(count))
         if ok:
             self.base_view.apply_cell_size()
         else:
             QMessageBox.warning(self, 'fail', 'some row has data')
 
     def update_model_col_count(self, count):
-        if not self.model.change_col_count(int(count)):
+        if not self.cur_model.change_col_count(int(count)):
             QMessageBox.warning(self, 'fail', 'some row has data')
 
     def set_all_column_width(self, width):
         w = int(width) if width.isdigit() else 0
         if w > 0 and w <= 100:
-            for c in range(self.model.columnCount()):
+            for c in range(self.cur_model.columnCount()):
                 self.base_view.set_column_width(c, w)
                 self.top_view.setColumnWidth(c, w)
 
     def set_all_row_height(self, height):
         h = int(height) if height.isdigit() else 0
         if h > 0 and h <= 100:
-            for r in range(self.model.rowCount()):
+            for r in range(self.cur_model.rowCount()):
                 self.base_view.set_row_height(r, h)
 
     def move_to_last_index(self):
-        last_index = self.model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
-        self.base_view.set_curr_index(last_index)
+        last_index = self.cur_model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
+        self.cur_view.set_curr_index(last_index)
 
     def show_model_row_col(self):
-        self.txt_row_count.set_text(self.model.rowCount())
-        self.txt_col_count.set_text(self.model.columnCount())
+        self.txt_row_count.set_text(self.cur_model.rowCount())
+        self.txt_col_count.set_text(self.cur_model.columnCount())
 
     def open(self, path = None):
         if not path:
             path, _ = QFileDialog.getOpenFileName(self, 'select open file')
 
-        model = self.load_model_from_file(path)
-        if model:
-            self.model = model
-            self.txt_path.setText(path)
-            self.curr_path = path
-            co.save_settings('last_file', self.curr_path)
-
-            self.base_view.set_model(self.model)
-
-            self.move_to_last_index()
-            self.show_model_row_col()
-        else:
+        if not self.load_model_from_file(path):
             QMessageBox.warning(self, 'open', "couldn't find file")
 
     def save(self, path = None):
@@ -525,7 +562,7 @@ class MainWindow(QMainWindow):
             path, _ = QFileDialog.getSaveFileName(self, 'select save file')
 
         with open(path, 'wb') as f:
-            pickle.dump(self.model.get_src_data(), f)
+            pickle.dump(self.cur_model.get_src_data(), f)
 
         if is_new_save:
             self.open(path)
@@ -535,9 +572,18 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, 'save', 'saved')
 
     def create_new(self):
-        self.model = JobModel(default_list_data, self.undostack)
-        self.base_view.set_model(self.model)
-        self.show_model_row_col()
+        # self.model = JobModel(default_list_data, self.undostack)
+        # self.base_view.set_model(self.model)
+        # self.show_model_row_col()
+
+        self.clear_all_views()
+        # self.load_models(default_tabbed_data)
+        self.load_models(test_tabbed_data)
+
+    def clear_all_views(self):
+        for i, v in enumerate(self.views):
+            self.tab_notes.removeTab(i)
+            v.close()
 
     def save_ui_settings(self):
         co.save_settings('col_width', int(self.txt_cell_width.text()))
@@ -549,7 +595,7 @@ class MainWindow(QMainWindow):
         self.undostack.push(cmd)
         # indexes = self.base_view.selected_indexes()
         # for i in indexes:
-        #     self.model.del_data_at(i)
+        #     self.cur_model.del_data_at(i)
 
     def insert_all_row(self, insert_below = False):
         cur_i = self.base_view.curr_index()
@@ -572,16 +618,16 @@ class MainWindow(QMainWindow):
     def set_bgcolor(self):
         color = QColorDialog.getColor()
         cur_i = self.base_view.curr_index()
-        self.model.set_style_at(cur_i.row(), cur_i.column(), color)
+        self.cur_model.set_style_at(cur_i.row(), cur_i.column(), color)
         self.base_view.update(cur_i)
 
         for i in self.base_view.selected_indexes():
-            self.model.set_style_at(i.row(), i.column(), color)
+            self.cur_model.set_style_at(i.row(), i.column(), color)
             self.base_view.update(i)
 
     def clear_bgcolor(self):
         for i in self.base_view.selected_indexes():
-            self.model.del_style_at(i.row(), i.column())
+            self.cur_model.del_style_at(i.row(), i.column())
             self.base_view.update(i)
 
     def copy_to_clipboard(self):
@@ -605,11 +651,11 @@ class MainWindow(QMainWindow):
         cur_i = self.base_view.curr_index()
         for r, l in enumerate(csv.reader(text.split('\n'))):
             for c, t in enumerate(l):
-                i = self.model.index(cur_i.row() + r, cur_i.column() + c)
+                i = self.cur_model.index(cur_i.row() + r, cur_i.column() + c)
                 if t == '':
-                    self.model.del_data_at(i.row(), i.column())
+                    self.cur_model.del_data_at(i.row(), i.column())
                 else:
-                    self.model.set_data_at(i.row(), i.column(), t)
+                    self.cur_model.set_data_at(i.row(), i.column(), t)
 
     def move_to_index(self, index):
         self.base_view.set_curr_index(index)
@@ -619,28 +665,28 @@ class MainWindow(QMainWindow):
         if key == Qt.Key_Up:
             cur_i = self.base_view.curr_index()
             for r in range(cur_i.row() - 1, 0, -1):
-                i = self.model.index(r, cur_i.column())
+                i = self.cur_model.index(r, cur_i.column())
                 if i.data():
                     self.move_to_index(i)
                     return
         elif key == Qt.Key_Down:
             cur_i = self.base_view.curr_index()
-            for r in range(cur_i.row() + 1, self.model.rowCount()):
-                i = self.model.index(r, cur_i.column())
+            for r in range(cur_i.row() + 1, self.cur_model.rowCount()):
+                i = self.cur_model.index(r, cur_i.column())
                 if i.data():
                     self.move_to_index(i)
                     return
         elif key == Qt.Key_Left:
             cur_i = self.base_view.curr_index()
             for c in range(cur_i.column() - 1, 0, -1):
-                i = self.model.index(cur_i.row(), c)
+                i = self.cur_model.index(cur_i.row(), c)
                 if i.data():
                     self.move_to_index(i)
                     return
         elif key == Qt.Key_Right:
             cur_i = self.base_view.curr_index()
-            for c in range(cur_i.column() + 1, self.model.columnCount()):
-                i = self.model.index(cur_i.row(), c)
+            for c in range(cur_i.column() + 1, self.cur_model.columnCount()):
+                i = self.cur_model.index(cur_i.row(), c)
                 if i.data():
                     self.move_to_index(i)
                     return
@@ -648,13 +694,13 @@ class MainWindow(QMainWindow):
     def move_to_end(self, key):
         cur_i = self.base_view.curr_index()
         if key == Qt.Key_Up:
-            self.move_to_index(self.model.index(0, cur_i.column()))
+            self.move_to_index(self.cur_model.index(0, cur_i.column()))
         elif key == Qt.Key_Down:
-            self.move_to_index(self.model.index(self.model.rowCount() - 1, cur_i.column()))
+            self.move_to_index(self.cur_model.index(self.cur_model.rowCount() - 1, cur_i.column()))
         elif key == Qt.Key_Left:
-            self.move_to_index(self.model.index(cur_i.row(), 0))
+            self.move_to_index(self.cur_model.index(cur_i.row(), 0))
         elif key == Qt.Key_Right:
-            self.move_to_index(self.model.index(cur_i.row(), self.model.columnCount() - 1))
+            self.move_to_index(self.cur_model.index(cur_i.row(), self.cur_model.columnCount() - 1))
 
 
 class SetDataCommand(QUndoCommand):
