@@ -242,8 +242,9 @@ class NoteDataView(NoteView):
 
 
 class SplitTableView(QWidget):
-    def __init__(self):
+    def __init__(self, page_name = None):
         super().__init__()
+        self.page_name = page_name if page_name is not None else 'default'
         self.init_ui()
         self.init_views()
 
@@ -306,6 +307,9 @@ class SplitTableView(QWidget):
     def set_cell_font_size(self, font_size):
         self.top_view.set_cell_font_size(font_size)
         self.data_view.set_cell_font_size(font_size)
+
+    def model(self):
+        return self.data_view.model()
 
     def set_model(self, model):
         self.top_view.setModel(model)

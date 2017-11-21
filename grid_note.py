@@ -37,10 +37,10 @@ class StyledNoteData(NoteData):
         self.bgcolor = bgcolor
 
 
-default_list_data = [[None] * 100 for r in range(100)]
-default_tabbed_data = [('default', [[None] * 50 for r in range(100)])]
-test_tabbed_data = [('1st page', [[None] * 50 for r in range(100)]),
-                    ('2nd page', [[None] * 50 for r in range(100)])]
+default_single_tab_data = [[None] * 50 for r in range(100)]
+default_tabbed_data = [('default', default_single_tab_data)]
+test_tabbed_data = [('1st page', default_single_tab_data),
+                    ('2nd page', default_single_tab_data)]
 test_tabbed_data[0][1][0][0] = StyledNoteData(0, 0, 'aaa')
 
 
@@ -302,12 +302,13 @@ class MainWindow(QMainWindow):
 
         self.cur_model = None
         self.cur_page_name = ''
+
+        self.views = []
         self.cur_view = None
 
         self.setup_ui()
         self.init_focus_policy()
         self.init_signal_slots()
-        # self.init_view_settings()
 
         self.undostack = QUndoStack()
         self.curr_path = None
@@ -343,12 +344,14 @@ class MainWindow(QMainWindow):
         self.btn_new = QPushButton('new')
         self.btn_bg_color = QPushButton('b-color')
         self.btn_clear_bg_color = QPushButton('clear b-color')
+        self.btn_add_tab = QPushButton('add tab')
         buttonlayout.addWidget(self.btn_open)
         buttonlayout.addWidget(self.btn_save)
         buttonlayout.addWidget(self.btn_save_as)
         buttonlayout.addWidget(self.btn_new)
         buttonlayout.addWidget(self.btn_bg_color)
         buttonlayout.addWidget(self.btn_clear_bg_color)
+        buttonlayout.addWidget(self.btn_add_tab)
 
         gridlayout.addLayout(settingLayout, 0, 0)
         gridlayout.addWidget(self.txt_path, 1, 0)
@@ -356,13 +359,6 @@ class MainWindow(QMainWindow):
 
         self.tab_notes = QTabWidget()
         gridlayout.addWidget(self.tab_notes, 3, 0)
-
-        # self.base_view = SplitTableView()
-        # self.tab_notes.addTab(self.base_view, 'note 1')
-        # '''todo this is temp setup for single model'''
-        # self.views = []
-        # self.views.append(self.base_view)
-        self.views = []
 
         self.setting_ui = SettingPane(self.centralWidget())
         self.setting_ui.hide()
@@ -383,8 +379,12 @@ class MainWindow(QMainWindow):
         self.btn_new.clicked.connect(self.create_new)
         self.btn_bg_color.clicked.connect(self.set_bgcolor)
         self.btn_clear_bg_color.clicked.connect(self.clear_bgcolor)
+        self.btn_add_tab.clicked.connect(self.add_tab)
 
     def open_last_file(self):
+        if len(sys.argv) > 1:
+            self.open('test_note.note')
+            return
         self.open(co.load_settings('last_file'))
 
     def init_focus_policy(self):
@@ -479,12 +479,22 @@ class MainWindow(QMainWindow):
 
         with open(path, 'rb') as f:
             if self.load_models(pickle.load(f)):
-                self.txt_path.setText(path)
-                self.curr_path = path
+                self.set_path(path)
                 co.save_settings('last_file', self.curr_path)
                 return True
             else:
                 return False
+
+    def add_view(self, page_name, model):
+        view = SplitTableView(page_name)
+        self.views.append(view)
+        self.tab_notes.addTab(view, view.page_name)
+        ''' todo : can't connect to multi views - change need'''
+        self.txt_cell_font_size.return_pressed.connect(view.set_cell_font_size)
+        self.init_view_settings(view)
+        view.set_model(model)
+
+        return view
 
     def load_models(self, data):
         models = []
@@ -496,23 +506,18 @@ class MainWindow(QMainWindow):
 
         if len(models) > 0:
             self.models = models
-            # self.base_view.set_model(self.models[0][1])
 
             for page_name, model in models:
-                view = SplitTableView()
-                view.set_model(model)
-                self.views.append(view)
-                self.tab_notes.addTab(view, page_name)
-                self.txt_cell_font_size.return_pressed.connect(view.set_cell_font_size)
-                self.init_view_settings(view)
+                self.add_view(page_name, model)
+
             if len(self.views) > 0:
                 self.cur_view = self.views[0]
                 self.cur_view.give_focus()
-
             self.cur_page_name = self.models[0][0]
             self.cur_model = self.models[0][1]
             self.move_to_last_index()
             self.show_model_row_col()
+
             return True
         else:
             return False
@@ -556,13 +561,16 @@ class MainWindow(QMainWindow):
         if not self.load_model_from_file(path):
             QMessageBox.warning(self, 'open', "couldn't find file")
 
+    def make_save_object(self):
+        return [(v.page_name, v.model().get_src_data()) for v in self.views]
+
     def save(self, path = None):
         is_new_save = path is None
         if is_new_save:
             path, _ = QFileDialog.getSaveFileName(self, 'select save file')
 
         with open(path, 'wb') as f:
-            pickle.dump(self.cur_model.get_src_data(), f)
+            pickle.dump(self.make_save_object(), f)
 
         if is_new_save:
             self.open(path)
@@ -571,12 +579,18 @@ class MainWindow(QMainWindow):
 
         QMessageBox.information(self, 'save', 'saved')
 
+    def set_path(self, path):
+        self.txt_path.setText(path)
+        self.curr_path = path if path != '' else None
+
     def create_new(self):
         # self.model = JobModel(default_list_data, self.undostack)
         # self.base_view.set_model(self.model)
         # self.show_model_row_col()
 
         self.clear_all_views()
+        self.set_path('')
+
         # self.load_models(default_tabbed_data)
         self.load_models(test_tabbed_data)
 
@@ -629,6 +643,16 @@ class MainWindow(QMainWindow):
         for i in self.base_view.selected_indexes():
             self.cur_model.del_style_at(i.row(), i.column())
             self.base_view.update(i)
+
+    def add_tab(self):
+        '''default model 달린 view가 추가되면 됨'''
+        model = JobModel(default_single_tab_data, self.undostack)
+        view = self.add_view('page2', model)
+        self.models.append(model)
+
+        '''new view as current'''
+        self.cur_view = view
+        self.tab_notes.setCurrentWidget(view)
 
     def copy_to_clipboard(self):
         selections = self.base_view.selected_indexes()
