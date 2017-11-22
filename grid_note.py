@@ -4,6 +4,7 @@ import typing
 import pickle
 import io
 import csv
+from itertools import product
 
 from defines import StyledNoteData, Checker
 import common_util as co
@@ -35,6 +36,9 @@ class NoteModel(QAbstractTableModel):
 
     def data_at(self, r, c):
         return self.src_data[r][c]
+
+    def content_at(self, r, c):
+        return self.data_at(r, c).content if self.data_at(r, c) else None
 
     def style_at(self, r, c):
         return self.data_at(r, c)
@@ -380,7 +384,11 @@ class MainWindow(QMainWindow):
         mod = QApplication.keyboardModifiers()
         # # for key check
         # print('key={}, text={}, name={}'.format(key, e.text(), QtGui.QKeySequence(key).toString()))
-        if key == Qt.Key_S and mod == Qt.ControlModifier:
+        if key == Qt.Key_Escape:
+            # toto: will introduce state
+            if self.find_ui.isVisible():
+                self.close_find_ui()
+        elif key == Qt.Key_S and mod == Qt.ControlModifier:
             self.save(self.curr_path)
             e.accept()
         elif key == Qt.Key_F and mod == Qt.ControlModifier:
@@ -715,16 +723,25 @@ class MainWindow(QMainWindow):
     def show_find(self):
         self.find_ui.show()
 
-    def find_text(self, text):
-        co.debug_msg(self, text)
+    def close_find_ui(self):
+        self.find_ui.hide()
+        self.cur_view.give_focus()
 
+    def find_text(self, text):
         '''
-        결과를 어떻게 표시할까?
-        현재 뷰에 highlight 주고, 순회할 수 있도록 할까?
-        esc 누르면 find 결과 모드를 나오고 highlight 사라지고
-        음 일반적이고 유용한 방법이긴 하지
-        더 좋은 방법은 뭘까?
+        일단 간단히 find next 로 구현
         '''
+        found_index = None
+        cur_i = self.cur_view.curr_index()
+        for r, c in product(range(cur_i.row() + 1, self.cur_model.rowCount()), range(self.cur_model.columnCount())):
+            content = self.cur_model.content_at(r, c)
+            if content and text in content:
+                found_index = self.cur_model.index(r, c)
+                break
+        if found_index:
+            self.move_to_index(found_index)
+        else:
+            co.debug_msg(self, 'not found')
 
 
 class SetDataCommand(QUndoCommand):

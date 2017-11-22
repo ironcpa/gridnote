@@ -472,6 +472,7 @@ class FindWidget(QWidget):
     def init_signal_slots(self):
         self.btn_find.clicked.connect(lambda: self.find_req.emit(self.txt_find_text.text()))
         self.btn_close.clicked.connect(self.hide)
+        self.txt_find_text.returnPressed.connect(lambda: self.find_req.emit(self.txt_find_text.text()))
 
     def paintEvent(self, e):
         painter = QtGui.QPainter()
