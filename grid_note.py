@@ -334,6 +334,9 @@ class MainWindow(QMainWindow):
         self.tab_notes.setTabBar(EditableTabBar(self))
         gridlayout.addWidget(self.tab_notes, 3, 0)
 
+        self.find_ui = FindWidget(self.centralWidget())
+        self.find_ui.hide()
+
         self.setting_ui = SettingPane(self.centralWidget())
         self.setting_ui.hide()
 
@@ -354,6 +357,8 @@ class MainWindow(QMainWindow):
         self.btn_bg_color.clicked.connect(self.set_bgcolor)
         self.btn_clear_bg_color.clicked.connect(self.clear_bgcolor)
         self.btn_add_tab.clicked.connect(self.add_tab)
+
+        self.find_ui.find_req.connect(self.find_text)
 
     def open_last_file(self):
         if len(sys.argv) > 1:
@@ -377,6 +382,9 @@ class MainWindow(QMainWindow):
         # print('key={}, text={}, name={}'.format(key, e.text(), QtGui.QKeySequence(key).toString()))
         if key == Qt.Key_S and mod == Qt.ControlModifier:
             self.save(self.curr_path)
+            e.accept()
+        elif key == Qt.Key_F and mod == Qt.ControlModifier:
+            self.show_find()
             e.accept()
         elif key == Qt.Key_Delete:
             self.delete_selected()
@@ -703,6 +711,20 @@ class MainWindow(QMainWindow):
             self.move_to_index(self.cur_model.index(cur_i.row(), 0))
         elif key == Qt.Key_Right:
             self.move_to_index(self.cur_model.index(cur_i.row(), self.cur_model.columnCount() - 1))
+
+    def show_find(self):
+        self.find_ui.show()
+
+    def find_text(self, text):
+        co.debug_msg(self, text)
+
+        '''
+        결과를 어떻게 표시할까?
+        현재 뷰에 highlight 주고, 순회할 수 있도록 할까?
+        esc 누르면 find 결과 모드를 나오고 highlight 사라지고
+        음 일반적이고 유용한 방법이긴 하지
+        더 좋은 방법은 뭘까?
+        '''
 
 
 class SetDataCommand(QUndoCommand):

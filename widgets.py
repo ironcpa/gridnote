@@ -110,50 +110,6 @@ class SettingPane(QWidget):
 
         self.setLayout(gridlayout)
 
-        # elif key == Qt.Key_K and mod == Qt.ControlModifier:
-        #     self.delete_all_row()
-        #     e.accept()
-        # elif key == Qt.Key_O and mod == Qt.ControlModifier:
-        #     self.insert_sel_col()
-        #     e.accept()
-        # elif key == Qt.Key_L and mod == Qt.ControlModifier:
-        #     self.delete_sel_col()
-        #     e.accept()
-        # elif key == Qt.Key_C and mod == Qt.ControlModifier:
-        #     self.copy_to_clipboard()
-        #     e.accept()
-        # elif key == Qt.Key_X and mod == Qt.ControlModifier:
-        #     self.copy_to_clipboard()
-        #     self.delete_selected()
-        #     e.accept()
-        # elif key == Qt.Key_V and mod == Qt.ControlModifier:
-        #     self.paste_from_clipboard()
-        #     e.accept()
-        # elif key == Qt.Key_Z and mod == Qt.ControlModifier:
-        #     self.undostack.undo()
-        #     e.accept()
-        # elif key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Right, Qt.Key_Left) and mod == Qt.ControlModifier:
-        #     self.move_to_first_data(key)
-        #     e.accept()
-        # elif key in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Right, Qt.Key_Left)\
-        #         and mod == Qt.ControlModifier | Qt.ShiftModifier:
-        #     self.move_to_end(key)
-        # elif key == Qt.Key_Period and mod == Qt.ControlModifier:
-        #     self.model.set_checker(self.view.currentIndex().row(), '>')
-        #     e.accept()
-        # elif key == Qt.Key_Comma and mod == Qt.ControlModifier:
-        #     self.model.set_checker(self.view.currentIndex().row())
-        #     e.accept()
-        # elif key == Qt.Key_Slash and mod == Qt.ControlModifier:
-        #     self.model.set_checker(self.view.currentIndex().row(), 'o')
-        #     e.accept()
-        # elif key == 39 and mod == Qt.ControlModifier:
-        #     self.model.set_checker(self.view.currentIndex().row(), 'x')
-        #     e.accept()
-        # elif key == Qt.Key_H and mod == Qt.ControlModifier:
-        #     self.show_settings()
-        #     e.accept()
-
     def paintEvent(self, a0: QtGui.QPaintEvent):
         painter = QtGui.QPainter()
         painter.begin(self)
@@ -487,6 +443,48 @@ class EditableTabBar(QTabBar):
             self._editor.hide()
 
 
+class FindWidget(QWidget):
+    find_req = pyqtSignal(str)
+
+    def __init__(self, parent):
+        super(FindWidget, self).__init__(parent)
+
+        # self.setStyleSheet('background-color: yellow')
+        self.setup_ui()
+        self.init_signal_slots()
+
+    def setup_ui(self):
+        self.setGeometry(0, 0, 500, 100)
+
+        base_layout = QVBoxLayout()
+        self.setLayout(base_layout)
+
+        self.txt_find_text = QLineEdit()
+        self.btn_find = QPushButton('find')
+        self.btn_close = QPushButton('close')
+
+        base_layout.addWidget(self.txt_find_text)
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.btn_find)
+        button_layout.addWidget(self.btn_close)
+        base_layout.addLayout(button_layout)
+
+    def init_signal_slots(self):
+        self.btn_find.clicked.connect(lambda: self.find_req.emit(self.txt_find_text.text()))
+        self.btn_close.clicked.connect(self.hide)
+
+    def paintEvent(self, e):
+        painter = QtGui.QPainter()
+        painter.begin(self)
+        painter.fillRect(self.rect(), Qt.blue)
+        painter.end()
+        super().paintEvent(e)
+
+    def show(self):
+        super().show()
+        self.txt_find_text.setFocus()
+
+
 class TestLineEdit(QLineEdit):
     def __init__(self, parent):
         super().__init__(parent)
@@ -523,6 +521,13 @@ class TestWindow(QWidget):
         tab.addTab(tab_content2, 'tab 2')
 
         layout.addWidget(tab)
+
+        find_widget = FindWidget(self)
+        find_widget.find_req.connect(self.dummy_slot)
+        find_widget.show()
+
+    def dummy_slot(self, arg):
+        QMessageBox.information(self, 'test', str(arg))
 
 
 def catch_exceptions(self, t, val, tb):
