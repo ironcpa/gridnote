@@ -5,36 +5,9 @@ import pickle
 import io
 import csv
 
+from defines import StyledNoteData, Checker
 import common_util as co
 from widgets import *
-
-
-class Data:
-    def __init__(self, r = 0, c = 0):
-        # these are needed on commands undo
-        self.r = r
-        self.c = c
-
-    def is_data(self):
-        return False
-
-    def is_at(self, index):
-        return self.r == index.row() and self.c == index.column()
-
-
-class NoteData(Data):
-    def __init__(self, r = 0, c = 0, content = ''):
-        super().__init__(r, c)
-        self.content = content
-
-    def is_data(self):
-        return True
-
-
-class StyledNoteData(NoteData):
-    def __init__(self, r = 0, c = 0, content = '', bgcolor = None):
-        super().__init__(r, c, content)
-        self.bgcolor = bgcolor
 
 
 default_single_tab_data = [[None] * 50 for r in range(100)]
@@ -261,21 +234,21 @@ class JobModel(NoteModel):
             if checker in ('o', '>'):
                 is_progressing = True
         if is_all_complete:
-            self.set_checker(index.row(), 'o')
+            self.set_checker(index.row(), Checker.DONE)
         elif is_progressing:
-            self.set_checker(index.row(), '>')
+            self.set_checker(index.row(), Checker.PROGRESS)
         else:
             self.set_checker(index.row(), None)
 
         self.layoutChanged.emit()
 
     def checker(self, row):
-        return self.data_at(row, self.check_col).content
+        return Checker.get_def(self.data_at(row, self.check_col).content)
 
     def set_checker(self, row, checker = None):
         if checker:
             i = self.index(row, self.check_col)
-            self.set_data_at(row, self.check_col, checker)
+            self.set_data_at(row, self.check_col, checker.str)
         else:
             self.del_data_at(row, self.check_col)
 
@@ -373,7 +346,7 @@ class MainWindow(QMainWindow):
         self.txt_col_count.return_pressed.connect(self.update_model_col_count)
         self.txt_cell_width.return_pressed.connect(self.set_all_column_width)
         self.txt_cell_height.return_pressed.connect(self.set_all_row_height)
-        # self.txt_cell_font_size.return_pressed.connect(self.base_view.set_cell_font_size)
+        # self.txt_cell_font_size.return_pressed.connect(self.cur_view.set_cell_font_size)
         self.btn_open.clicked.connect(self.open)
         self.btn_save.clicked.connect(lambda state: self.save(self.curr_path))
         self.btn_save_as.clicked.connect(lambda state: self.save())
@@ -443,22 +416,22 @@ class MainWindow(QMainWindow):
                 and mod == Qt.ControlModifier | Qt.ShiftModifier:
             self.move_to_end(key)
         elif key == Qt.Key_Period and mod == Qt.ControlModifier:
-            self.cur_model.set_checker(self.base_view.curr_row(), '>')
+            self.cur_model.set_checker(self.cur_view.curr_row(), Checker.PROGRESS)
             e.accept()
         elif key == Qt.Key_Comma and mod == Qt.ControlModifier:
-            self.cur_model.set_checker(self.base_view.curr_row())
+            self.cur_model.set_checker(self.cur_view.curr_row())
             e.accept()
         elif key == Qt.Key_Slash and mod == Qt.ControlModifier:
-            self.cur_model.set_checker(self.base_view.curr_row(), 'o')
+            self.cur_model.set_checker(self.cur_view.curr_row(), Checker.DONE)
             e.accept()
         elif key == 39 and mod == Qt.ControlModifier:
-            self.cur_model.set_checker(self.base_view.curr_row(), 'x')
+            self.cur_model.set_checker(self.cur_view.curr_row(), Checker.MISSED)
             e.accept()
         elif key == Qt.Key_Minus and mod == Qt.ControlModifier:
-            self.cur_model.set_checker(self.base_view.curr_row(), '-')
+            self.cur_model.set_checker(self.cur_view.curr_row(), Checker.IGNORE)
             e.accept()
         elif key == Qt.Key_M and mod == Qt.ControlModifier:
-            self.cur_model.set_checker(self.base_view.curr_row(), 'm')
+            self.cur_model.set_checker(self.cur_view.curr_row(), Checker.MOVETO)
             e.accept()
         elif key == Qt.Key_H and mod == Qt.ControlModifier:
             self.toggle_show_settings()
@@ -530,7 +503,7 @@ class MainWindow(QMainWindow):
     def update_model_row_count(self, count):
         ok = self.cur_model.change_row_count(int(count))
         if ok:
-            self.base_view.apply_cell_size()
+            self.cur_view.apply_cell_size()
         else:
             QMessageBox.warning(self, 'fail', 'some row has data')
 
@@ -542,14 +515,14 @@ class MainWindow(QMainWindow):
         w = int(width) if width.isdigit() else 0
         if w > 0 and w <= 100:
             for c in range(self.cur_model.columnCount()):
-                self.base_view.set_column_width(c, w)
+                self.cur_view.set_column_width(c, w)
                 self.top_view.setColumnWidth(c, w)
 
     def set_all_row_height(self, height):
         h = int(height) if height.isdigit() else 0
         if h > 0 and h <= 100:
             for r in range(self.cur_model.rowCount()):
-                self.base_view.set_row_height(r, h)
+                self.cur_view.set_row_height(r, h)
 
     def move_to_last_index(self):
         last_index = self.cur_model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
@@ -590,7 +563,7 @@ class MainWindow(QMainWindow):
 
     def create_new(self):
         # self.model = JobModel(default_list_data, self.undostack)
-        # self.base_view.set_model(self.model)
+        # self.cur_view.set_model(self.model)
         # self.show_model_row_col()
 
         self.clear_all_views()
@@ -610,44 +583,44 @@ class MainWindow(QMainWindow):
         co.save_settings('cell_font_size', int(self.txt_cell_font_size.text()))
 
     def delete_selected(self):
-        cmd = DeleteCommand(self.base_view.selected_indexes())
+        cmd = DeleteCommand(self.cur_view.selected_indexes())
         self.undostack.push(cmd)
-        # indexes = self.base_view.selected_indexes()
+        # indexes = self.cur_view.selected_indexes()
         # for i in indexes:
         #     self.cur_model.del_data_at(i)
 
     def insert_all_row(self, insert_below = False):
-        cur_i = self.base_view.curr_index()
-        cmd = InsertAllRowCommand(cur_i, insert_below, self.base_view)
+        cur_i = self.cur_view.curr_index()
+        cmd = InsertAllRowCommand(cur_i, insert_below, self.cur_view)
         self.undostack.push(cmd)
 
     def delete_all_row(self):
-        cur_i = self.base_view.curr_index()
+        cur_i = self.cur_view.curr_index()
         cmd = DeleteAllRowCommand(cur_i)
         self.undostack.push(cmd)
 
     def insert_sel_col(self):
-        cmd = InsertColumnCommand(self.base_view.selected_indexes())
+        cmd = InsertColumnCommand(self.cur_view.selected_indexes())
         self.undostack.push(cmd)
 
     def delete_sel_col(self):
-        cmd = DeleteColumnCommand(self.base_view.selected_indexes())
+        cmd = DeleteColumnCommand(self.cur_view.selected_indexes())
         self.undostack.push(cmd)
 
     def set_bgcolor(self):
         color = QColorDialog.getColor()
-        cur_i = self.base_view.curr_index()
+        cur_i = self.cur_view.curr_index()
         self.cur_model.set_style_at(cur_i.row(), cur_i.column(), color)
-        self.base_view.update(cur_i)
+        self.cur_view.update(cur_i)
 
-        for i in self.base_view.selected_indexes():
+        for i in self.cur_view.selected_indexes():
             self.cur_model.set_style_at(i.row(), i.column(), color)
-            self.base_view.update(i)
+            self.cur_view.update(i)
 
     def clear_bgcolor(self):
-        for i in self.base_view.selected_indexes():
+        for i in self.cur_view.selected_indexes():
             self.cur_model.del_style_at(i.row(), i.column())
-            self.base_view.update(i)
+            self.cur_view.update(i)
 
     def add_tab(self):
         '''default model 달린 view가 추가되면 됨'''
@@ -660,7 +633,7 @@ class MainWindow(QMainWindow):
         self.tab_notes.setCurrentWidget(view)
 
     def copy_to_clipboard(self):
-        selections = self.base_view.selected_indexes()
+        selections = self.cur_view.selected_indexes()
         if selections:
             rows = sorted(i.row() for i in selections)
             cols = sorted(i.column() for i in selections)
@@ -677,7 +650,7 @@ class MainWindow(QMainWindow):
 
     def paste_from_clipboard(self):
         text = QApplication.clipboard().text()
-        cur_i = self.base_view.curr_index()
+        cur_i = self.cur_view.curr_index()
         for r, l in enumerate(csv.reader(text.split('\n'))):
             for c, t in enumerate(l):
                 i = self.cur_model.index(cur_i.row() + r, cur_i.column() + c)
@@ -687,33 +660,33 @@ class MainWindow(QMainWindow):
                     self.cur_model.set_data_at(i.row(), i.column(), t)
 
     def move_to_index(self, index):
-        self.base_view.set_curr_index(index)
-        self.base_view.select(index, QItemSelectionModel.ClearAndSelect)
+        self.cur_view.set_curr_index(index)
+        self.cur_view.select(index, QItemSelectionModel.ClearAndSelect)
 
     def move_to_first_data(self, key):
         if key == Qt.Key_Up:
-            cur_i = self.base_view.curr_index()
+            cur_i = self.cur_view.curr_index()
             for r in range(cur_i.row() - 1, 0, -1):
                 i = self.cur_model.index(r, cur_i.column())
                 if i.data():
                     self.move_to_index(i)
                     return
         elif key == Qt.Key_Down:
-            cur_i = self.base_view.curr_index()
+            cur_i = self.cur_view.curr_index()
             for r in range(cur_i.row() + 1, self.cur_model.rowCount()):
                 i = self.cur_model.index(r, cur_i.column())
                 if i.data():
                     self.move_to_index(i)
                     return
         elif key == Qt.Key_Left:
-            cur_i = self.base_view.curr_index()
+            cur_i = self.cur_view.curr_index()
             for c in range(cur_i.column() - 1, 0, -1):
                 i = self.cur_model.index(cur_i.row(), c)
                 if i.data():
                     self.move_to_index(i)
                     return
         elif key == Qt.Key_Right:
-            cur_i = self.base_view.curr_index()
+            cur_i = self.cur_view.curr_index()
             for c in range(cur_i.column() + 1, self.cur_model.columnCount()):
                 i = self.cur_model.index(cur_i.row(), c)
                 if i.data():
@@ -721,7 +694,7 @@ class MainWindow(QMainWindow):
                     return
 
     def move_to_end(self, key):
-        cur_i = self.base_view.curr_index()
+        cur_i = self.cur_view.curr_index()
         if key == Qt.Key_Up:
             self.move_to_index(self.cur_model.index(0, cur_i.column()))
         elif key == Qt.Key_Down:
@@ -748,14 +721,14 @@ class SetDataCommand(QUndoCommand):
         if old_data:
             self.old_value = old_data.content
         if self.index.column() == self.model.check_col:
-            self.model.set_checker(self.index.row(), self.new_value)
+            self.model.set_checker(self.index.row(), Checker.get_def(self.new_value))
         else:
             self.model.set_data_at(self.r, self.c, self.new_value)
 
     def undo(self):
         if self.old_value:
             if self.index.column() == self.model.check_col:
-                self.model.set_checker(self.r, self.old_value)
+                self.model.set_checker(self.r, Checker.get_def(self.old_value))
             else:
                 self.model.set_data_at(self.r, self.c, self.old_value)
         else:
@@ -786,7 +759,7 @@ class DeleteCommand(QUndoCommand):
     def undo(self):
         for e in self.deleted_data:
             if e.c == self.model.check_col:
-                self.model.set_checker(e.r, e.content)
+                self.model.set_checker(e.r, Checker.get_def(e.content))
             else:
                 self.model.set_data_at(e.r, e.c, e.content)
         self.deleted_data.clear()
@@ -798,12 +771,12 @@ class InsertAllRowCommand(QUndoCommand):
 
         self.index = index if not insert_below else index.model().index(index.row() + 1, index.column())
         self.insert_below = insert_below
-        self.base_view = view
+        self.view = view
 
     def redo(self):
         self.index.model().insert_all_row(self.index)
-        if self.insert_below and self.base_view:
-            self.base_view.set_curr_index(self.index)
+        if self.insert_below and self.view:
+            self.view.set_curr_index(self.index)
 
     def undo(self):
         self.index.model().delete_all_row(self.index)

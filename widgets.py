@@ -1,6 +1,7 @@
 import os
 import sys
 
+from defines import Checker
 from PyQt5.QtWidgets import *
 from PyQt5 import uic, QtGui
 from PyQt5.QtCore import *
@@ -395,20 +396,27 @@ class NoteDataDelegate(QStyledItemDelegate):
             text_rect.setWidth(box_w)
             o_pen = painter.pen()
             check_col = index.model().check_col
-            if index.model().index(index.row(), check_col).data() == 'o':
-                painter.fillRect(text_rect, self.color_complete)
-            elif index.model().index(index.row(), check_col).data() == '>':
-                painter.fillRect(text_rect, Qt.blue)
-                painter.setPen(Qt.white)
-            elif index.model().index(index.row(), check_col).data() == 'x':
-                painter.fillRect(text_rect, Qt.red)
-                painter.setPen(Qt.white)
-            elif index.model().rel_checker(index) == '-':
-                painter.fillRect(text_rect, Qt.yellow)
-            elif index.model().rel_checker(index) == 'm':
-                painter.fillRect(text_rect, Qt.cyan)
-            elif index.model().index(index.row(), check_col).data() == None:
+            checker_def = Checker.get_def(index.model().index(index.row(), check_col).data())
+            if checker_def:
+                painter.fillRect(text_rect, checker_def.bgcolor)
+                if checker_def.fgcolor is not None:
+                    painter.setPen(checker_def.fgcolor)
+            else:
                 painter.fillRect(text_rect, self.color_blank)
+            # if index.model().index(index.row(), check_col).data() == Checker.DONE.str:
+            #     painter.fillRect(text_rect, self.color_complete)
+            # elif index.model().index(index.row(), check_col).data() == Checker.PROGRESS.str:
+            #     painter.fillRect(text_rect, Qt.blue)
+            #     painter.setPen(Qt.white)
+            # elif index.model().index(index.row(), check_col).data() == Checker.MISSED.str:
+            #     painter.fillRect(text_rect, Qt.red)
+            #     painter.setPen(Qt.white)
+            # elif index.model().rel_checker(index) == Checker.IGNORE.str:
+            #     painter.fillRect(text_rect, Qt.yellow)
+            # elif index.model().rel_checker(index) == Checker.MOVETO.str:
+            #     painter.fillRect(text_rect, Qt.cyan)
+            # elif index.model().index(index.row(), check_col).data() == None:
+            #     painter.fillRect(text_rect, self.color_blank)
 
             if option.state & QStyle.State_Selected:
                 painter.fillRect(option.rect, option.palette.highlight())

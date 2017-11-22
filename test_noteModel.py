@@ -44,7 +44,7 @@ class TestJobModel(TestCase):
 
         model.set_data_at(model.index(0, 5), 'parent')
 
-        model.set_checker(0, 'o')
+        model.set_checker(0, Checker.DONE)
         self.assertTrue(model.index(0, model.check_col).data() == 'o')
 
     def test_get_children_job_index(self):
@@ -94,14 +94,14 @@ class TestJobModel(TestCase):
         model.set_data_at(model.index(3, 7), 'sub-child1')
         model.set_data_at(model.index(4, 7), 'sub-child2')
 
-        model.set_checker(3, '>')
-        c_cherker = model.checker(3)
+        model.set_checker(3, Checker.PROGRESS)
+        c_checker = model.checker(3)
         p_index = model.parent_job_index(model.index(3, 7))
         p_data = p_index.data()
         p_checker = model.rel_checker(p_index)
-        print('child checker : ', c_cherker)
+        print('child checker : ', c_checker)
         print('parent data :', p_data)
         print('parent checker : ', p_checker)
-        self.assertTrue(c_cherker == '>')
+        self.assertTrue(c_checker == Checker.PROGRESS)
         self.assertTrue(p_data == 'child2')
-        self.assertTrue(p_checker == '>')
+        self.assertTrue(p_checker == Checker.PROGRESS)
