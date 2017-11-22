@@ -843,7 +843,7 @@ class InsertColumnCommand(QUndoCommand):
         m = self.model
         for i in self.indexes:
             r, cur_c = i.row(), i.column()
-            for c in range(m.columnCount(), cur_c + 1, -1):
+            for c in range(m.columnCount(), cur_c, -1):
                 left_c = c - 1
                 left_d = m.data_at(r, left_c)
                 if left_d:
