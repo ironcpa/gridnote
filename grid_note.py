@@ -367,6 +367,10 @@ class MainWindow(QMainWindow):
     def __init__(self, load_last_file = True):
         super().__init__()
 
+        self.is_dev = len(sys.argv) > 1
+
+        self.installEventFilter(self)
+
         self.cur_model = None
         self.cur_page_name = ''
 
@@ -455,10 +459,12 @@ class MainWindow(QMainWindow):
         self.btn_add_tab.clicked.connect(self.add_tab)
         self.btn_create_new_date.clicked.connect(self.create_new_date)
 
+        self.tab_notes.currentChanged.connect(self.change_tab)
+
         self.find_ui.find_req.connect(self.find_text)
 
     def open_last_file(self):
-        if len(sys.argv) > 1:
+        if self.is_dev:
             self.open('test_note.note')
             return
         self.open(cu.load_settings('last_file'))
@@ -471,6 +477,13 @@ class MainWindow(QMainWindow):
 
     def toggle_show_settings(self):
         self.setting_ui.setVisible(not self.setting_ui.isVisible())
+
+    def eventFilter(self, widget, e):
+        # this doesn't work ao 20171123
+        if e.type() == QEvent.KeyPress and e.key() == Qt.Key_Tab and e.mod() == Qt.ControlModifier:
+            self.change_tab()
+            return True
+        return super().eventFilter(widget, e)
 
     def keyPressEvent(self, e: QtGui.QKeyEvent):
         key = e.key()
@@ -545,6 +558,12 @@ class MainWindow(QMainWindow):
         elif key == Qt.Key_H and mod == Qt.ControlModifier:
             self.toggle_show_settings()
             e.accept()
+        elif key == Qt.Key_Tab and mod == Qt.ControlModifier:
+            self.change_to_next_tab()
+            e.accept()
+        elif key == Qt.Key_Tab and mod == Qt.ControlModifier | Qt.ShiftModifier:
+            self.change_to_next_tab(-1)
+            e.accept()
         else:
             e.ignore()
             super().keyPressEvent(e)
@@ -563,7 +582,8 @@ class MainWindow(QMainWindow):
         with open(path, 'rb') as f:
             if self.load_models(pickle.load(f)):
                 self.set_path(path)
-                cu.save_settings('last_file', self.curr_path)
+                if not self.is_dev:
+                    cu.save_settings('last_file', self.curr_path)
                 return True
             else:
                 return False
@@ -571,6 +591,7 @@ class MainWindow(QMainWindow):
     def set_cur_view(self, view):
         self.cur_view = view
         self.cur_model = view.model()
+        self.cur_view.give_focus()
 
     def add_view(self, page_name, model):
         view = SplitTableView(page_name)
@@ -740,6 +761,14 @@ class MainWindow(QMainWindow):
         '''new view as current'''
         self.set_cur_view(view)
         self.tab_notes.setCurrentWidget(view)
+
+    def change_tab(self, tab_index):
+        view = self.tab_notes.widget(tab_index)
+        self.set_cur_view(view)
+
+    def change_to_next_tab(self, offset = 1):
+        tab_index = (self.tab_notes.currentIndex() + offset) % self.tab_notes.count()
+        self.change_tab(tab_index)
 
     def create_new_date(self):
         '''

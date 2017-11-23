@@ -167,6 +167,10 @@ class NoteDataView(NoteView):
             e.ignore()
         elif key in (Qt.Key_Delete,):
             e.ignore()
+        elif key == Qt.Key_Tab and mods == Qt.ControlModifier:
+            e.ignore()
+        elif key == Qt.Key_Tab and mods == Qt.ControlModifier | Qt.ShiftModifier:
+            e.ignore()
         else:
             super(NoteView, self).keyPressEvent(e)
 
@@ -440,6 +444,7 @@ class EditableTabBar(QTabBar):
     def handleEditingFinished(self):
         index = self.currentIndex()
         if index >= 0:
+            self.setTabText(index, self._editor.text())
             self._editor.hide()
 
 
@@ -523,9 +528,9 @@ class TestWindow(QWidget):
 
         layout.addWidget(tab)
 
-        find_widget = FindWidget(self)
-        find_widget.find_req.connect(self.dummy_slot)
-        find_widget.show()
+        # find_widget = FindWidget(self)
+        # find_widget.find_req.connect(self.dummy_slot)
+        # find_widget.show()
 
     def dummy_slot(self, arg):
         QMessageBox.information(self, 'test', str(arg))
