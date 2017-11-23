@@ -5,9 +5,10 @@ import pickle
 import io
 import csv
 from itertools import product
+from datetime import datetime
 
 from defines import StyledNoteData, Checker
-import common_util as co
+import common_util as cu
 from widgets import *
 
 
@@ -192,17 +193,37 @@ class NoteModel(QAbstractTableModel):
         self.layoutChanged.emit()
         return True
 
+    def row_col_ranges(self):
+        return product(range(self.rowCount()), range(self.columnCount()))
+
+    def get_last_row(self):
+        for r, c in product(range(self.rowCount() - 1, 0, -1), range(self.columnCount())):
+            if self.data_at(r, c):
+               return r
+        return 0
+
+    def clear(self):
+        for r, c in self.row_col_ranges():
+            self.src_data[r][c] = None
+
+        self.layoutChanged.emit()
+
 
 class JobModel(NoteModel):
     def __init__(self, src_data, undostack):
         super().__init__(src_data, undostack)
+        self.date_col = 0
         self.check_col = 4
+        self.job_start_col = self.check_col + 1
 
     def parent_job_index(self, index):
         if not index:
             return None
 
         left_c = index.column() - 1
+        if left_c == self.check_col:
+            return None
+
         for r in range(index.row(), -1, -1):
             i = self.index(r, left_c)
             if self.index(r, left_c).data():
@@ -212,8 +233,13 @@ class JobModel(NoteModel):
     def children_job_indexes(self, index):
         results = []
         for r in range(index.row() + 1, self.rowCount()):
-            is_neighbor = self.index(r, index.column()).data() is not None
-            if is_neighbor:
+            '''imaginary root 고려'''
+            is_next_date_row = r != index.row() + 1 and self.data_at(r, self.date_col) is not None
+            is_neighbor = self.data_at(r, index.column()) is not None
+            is_checker = index.column() is self.check_col
+            if is_next_date_row:
+                break
+            if is_neighbor and not is_checker:
                 break
             i = self.index(r, index.column() + 1)
             if self.index(r, index.column() + 1).data():
@@ -230,12 +256,15 @@ class JobModel(NoteModel):
         is_all_complete = True
         is_progressing = False
         for i in children_indexes:
-            checker = self.rel_checker(i)
-            if checker in ('-', 'm'):
+            checker = self.checker(i.row())
+            # if checker in ('-', 'm'):
+            if checker in (Checker.IGNORE, Checker.MOVETO):
                 continue
-            if checker != 'o':
+            # if checker != 'o':
+            if checker != Checker.DONE:
                 is_all_complete = False
-            if checker in ('o', '>'):
+            # if checker in ('o', '>'):
+            if checker in (Checker.DONE, Checker.PROGRESS):
                 is_progressing = True
         if is_all_complete:
             self.set_checker(index.row(), Checker.DONE)
@@ -247,7 +276,11 @@ class JobModel(NoteModel):
         self.layoutChanged.emit()
 
     def checker(self, row):
-        return Checker.get_def(self.data_at(row, self.check_col).content)
+        d = self.content_at(row, self.check_col)
+        if d:
+            return Checker.get_def(d)
+        else:
+            return None
 
     def set_checker(self, row, checker = None):
         if checker:
@@ -265,12 +298,69 @@ class JobModel(NoteModel):
                 return i
         return None
 
-    def rel_checker(self, index):
-        data = self.data_at(index.row(), self.check_col)
-        if data:
-            return data.content
-        else:
-            return None
+    def get_latest_date_row(self):
+        for r in range(self.rowCount() - 1, 0, -1):
+            if self.data_at(r, self.date_col):
+                return r
+        return 0
+
+    def find_child_indexes_with_checker(self, my_index, checker):
+        founds = []
+
+        my_index_is_content = my_index.column() >= self.job_start_col
+        root_row = my_index.row() if my_index_is_content else my_index.row() - 1
+        root_col = my_index.column() if my_index_is_content else self.job_start_col - 1
+        root_index = self.index(root_row, root_col)
+
+        if root_row < 0:
+            return founds
+
+        children = self.children_job_indexes(root_index)
+        for i in children:
+            if self.checker(i.row()) is checker:
+                founds.append(i)
+            child_founds = self.find_child_indexes_with_checker(i, checker)
+            founds.extend(child_founds)
+
+        print('\t', 'find_child...', cu.str_index(my_index))
+        print('\t' * 2, 'root index:', cu.str_index(root_index))
+        print('\t' * 2, 'children:', cu.str_indexes(self.children_job_indexes(root_index)))
+        print('\t' * 2, 'founds:', cu.str_indexes(founds))
+        return founds
+
+    def collect_all_parent(self, index, coll_list):
+        parent_i = self.parent_job_index(index)
+        if not parent_i:
+            return
+        coll_list.append(parent_i.row())
+        self.collect_all_parent(parent_i, coll_list)
+
+    def add_copy_from_last_date(self, checker, *copy_checkers):
+        checker_content_indexes = self.find_child_indexes_with_checker(self.index(self.get_latest_date_row(), self.date_col), checker)
+
+        copy_rows = []
+        for i in checker_content_indexes:
+            copy_rows.append(i.row())
+            for r in [ci.row() for ci in self.children_job_indexes(i)]:
+                # this is for moveto checker, not generic logic
+                if self.checker(r) == checker or self.checker(r) in copy_checkers:
+                    copy_rows.append(r)
+
+        for i in checker_content_indexes:
+            self.collect_all_parent(i, copy_rows)
+
+        sorted_copy_rows = list(set(copy_rows))
+        sorted_copy_rows.sort()
+
+        cur_row = self.get_last_row() + 1
+        for r in sorted_copy_rows:
+            self.copy_rows(r, cur_row)
+            cur_row += 1
+
+    def copy_rows(self, src_r, tgt_r):
+        print('copy_rows: {}, {}'.format(src_r, tgt_r))
+        for c in range(self.columnCount()):
+            self.set_data_at(tgt_r, c, self.content_at(src_r, c))
 
 
 class MainWindow(QMainWindow):
@@ -303,9 +393,9 @@ class MainWindow(QMainWindow):
         settingLayout = QHBoxLayout()
         self.txt_row_count = LabeledLineEdit('row', 0)
         self.txt_col_count = LabeledLineEdit('col', 0)
-        self.txt_cell_width = LabeledLineEdit('cell width', co.load_settings('col_width', 50))
-        self.txt_cell_height = LabeledLineEdit('cell height', co.load_settings('row_height', 30))
-        self.txt_cell_font_size = LabeledLineEdit('font size', co.load_settings('cell_font_size', 12))
+        self.txt_cell_width = LabeledLineEdit('cell width', cu.load_settings('col_width', 50))
+        self.txt_cell_height = LabeledLineEdit('cell height', cu.load_settings('row_height', 30))
+        self.txt_cell_font_size = LabeledLineEdit('font size', cu.load_settings('cell_font_size', 12))
         settingLayout.addWidget(self.txt_row_count)
         settingLayout.addWidget(self.txt_col_count)
         settingLayout.addWidget(self.txt_cell_width)
@@ -322,6 +412,7 @@ class MainWindow(QMainWindow):
         self.btn_bg_color = QPushButton('b-color')
         self.btn_clear_bg_color = QPushButton('clear b-color')
         self.btn_add_tab = QPushButton('add tab')
+        self.btn_create_new_date = QPushButton('new date')
         buttonlayout.addWidget(self.btn_open)
         buttonlayout.addWidget(self.btn_save)
         buttonlayout.addWidget(self.btn_save_as)
@@ -329,6 +420,7 @@ class MainWindow(QMainWindow):
         buttonlayout.addWidget(self.btn_bg_color)
         buttonlayout.addWidget(self.btn_clear_bg_color)
         buttonlayout.addWidget(self.btn_add_tab)
+        buttonlayout.addWidget(self.btn_create_new_date)
 
         gridlayout.addLayout(settingLayout, 0, 0)
         gridlayout.addWidget(self.txt_path, 1, 0)
@@ -361,6 +453,7 @@ class MainWindow(QMainWindow):
         self.btn_bg_color.clicked.connect(self.set_bgcolor)
         self.btn_clear_bg_color.clicked.connect(self.clear_bgcolor)
         self.btn_add_tab.clicked.connect(self.add_tab)
+        self.btn_create_new_date.clicked.connect(self.create_new_date)
 
         self.find_ui.find_req.connect(self.find_text)
 
@@ -368,7 +461,7 @@ class MainWindow(QMainWindow):
         if len(sys.argv) > 1:
             self.open('test_note.note')
             return
-        self.open(co.load_settings('last_file'))
+        self.open(cu.load_settings('last_file'))
 
     def init_focus_policy(self):
         self.txt_cell_width.setFocusPolicy(Qt.ClickFocus)
@@ -457,8 +550,8 @@ class MainWindow(QMainWindow):
             super().keyPressEvent(e)
 
     def closeEvent(self, e: QtGui.QCloseEvent):
-        co.save_settings('last_row', self.cur_view.curr_row())
-        co.save_settings('last_col', self.cur_view.curr_col())
+        cu.save_settings('last_row', self.cur_view.curr_row())
+        cu.save_settings('last_col', self.cur_view.curr_col())
 
     def load_model_from_file(self, path):
         if not path:
@@ -470,7 +563,7 @@ class MainWindow(QMainWindow):
         with open(path, 'rb') as f:
             if self.load_models(pickle.load(f)):
                 self.set_path(path)
-                co.save_settings('last_file', self.curr_path)
+                cu.save_settings('last_file', self.curr_path)
                 return True
             else:
                 return False
@@ -541,7 +634,7 @@ class MainWindow(QMainWindow):
                 self.cur_view.set_row_height(r, h)
 
     def move_to_last_index(self):
-        last_index = self.cur_model.index(co.load_settings('last_row', 0), co.load_settings('last_col', 0))
+        last_index = self.cur_model.index(cu.load_settings('last_row', 0), cu.load_settings('last_col', 0))
         self.cur_view.set_curr_index(last_index)
 
     def show_model_row_col(self):
@@ -594,9 +687,9 @@ class MainWindow(QMainWindow):
             v.close()
 
     def save_ui_settings(self):
-        co.save_settings('col_width', int(self.txt_cell_width.text()))
-        co.save_settings('row_height', int(self.txt_cell_height.text()))
-        co.save_settings('cell_font_size', int(self.txt_cell_font_size.text()))
+        cu.save_settings('col_width', int(self.txt_cell_width.text()))
+        cu.save_settings('row_height', int(self.txt_cell_height.text()))
+        cu.save_settings('cell_font_size', int(self.txt_cell_font_size.text()))
 
     def delete_selected(self):
         cmd = DeleteCommand(self.cur_view.selected_indexes())
@@ -647,6 +740,22 @@ class MainWindow(QMainWindow):
         '''new view as current'''
         self.set_cur_view(view)
         self.tab_notes.setCurrentWidget(view)
+
+    def create_new_date(self):
+        '''
+        find last row
+        add date on col[0]
+        copy prev date's moveto checker data(include children, parent)
+        '''
+
+        date_row = self.cur_model.get_last_row() + 1
+
+        self.cur_model.add_copy_from_last_date(Checker.MOVETO, Checker.PROGRESS, None)
+
+        date = datetime.now().strftime('%Y-%m-%d')
+        self.cur_model.set_data_at(date_row, 0, date)
+        self.move_to_index(self.cur_model.index(date_row, 0))
+        self.cur_view.give_focus()
 
     def copy_to_clipboard(self):
         selections = self.cur_view.selected_indexes()
@@ -741,7 +850,7 @@ class MainWindow(QMainWindow):
         if found_index:
             self.move_to_index(found_index)
         else:
-            co.debug_msg(self, 'not found')
+            cu.debug_msg(self, 'not found')
 
 
 class SetDataCommand(QUndoCommand):

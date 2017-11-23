@@ -21,3 +21,16 @@ def save_settings(key, value):
 
 def debug_msg(parent, str):
     QMessageBox.information(parent, 'debug', str)
+
+
+def str_index(index):
+    if index:
+        return '({}:{})'.format(index.row(), index.column())
+
+
+def str_indexes(indexes):
+    return ''.join([str_index(i) for i in indexes])
+
+
+def make_index(model, *indexes):
+    return [model.index(r, c) for r, c in indexes]

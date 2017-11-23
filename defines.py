@@ -36,6 +36,9 @@ class Checker:
             self.bgcolor = bgcolor
             self.fgcolor = fgcolor
 
+        def __str__(self):
+            return self.str
+
     IGNORE = Def('-', Qt.yellow)
     PROGRESS = Def('>', Qt.blue, Qt.white)
     DONE = Def('o', Qt.green)
