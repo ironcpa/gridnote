@@ -45,6 +45,9 @@ class NoteModel(QAbstractTableModel):
         return self.data_at(r, c)
 
     def set_data_at(self, r, c, content):
+        if not content:
+            return
+
         self.src_data[r][c] = StyledNoteData(r, c, content)
         index = self.index(r, c)
         self.dataChanged.emit(index, index)
@@ -342,7 +345,6 @@ class JobModel(NoteModel):
         for i in checker_content_indexes:
             copy_rows.append(i.row())
             for r in [ci.row() for ci in self.children_job_indexes(i)]:
-                # this is for moveto checker, not generic logic
                 if self.checker(r) == checker or self.checker(r) in copy_checkers:
                     copy_rows.append(r)
 
@@ -779,11 +781,11 @@ class MainWindow(QMainWindow):
 
         date_row = self.cur_model.get_last_row() + 1
 
-        self.cur_model.add_copy_from_last_date(Checker.MOVETO, Checker.PROGRESS, None)
+        self.cur_model.add_copy_from_last_date(Checker.MOVETO, Checker.PROGRESS, Checker.MISSED, None)
 
         date = datetime.now().strftime('%Y-%m-%d')
         self.cur_model.set_data_at(date_row, 0, date)
-        self.move_to_index(self.cur_model.index(date_row, 0))
+        self.move_to_index(self.cur_model.index(date_row, 5))
         self.cur_view.give_focus()
 
     def copy_to_clipboard(self):

@@ -206,20 +206,58 @@ class TestJobModel(TestCase):
         # self.assertTrue(coping_rows == found_rows)
 
     def test_copy_from_last_date_movetos(self):
-        src_data = [[None for c in range(10)] for r in range(10)]
+        src_data = [[None] * 10 for r in range(100)]
         model = JobModel(src_data, None)
 
         model.clear()
         model.set_data_at(1, model.date_col, '2017-11-10')
 
-        model.set_data_at(1, 5, 'parent1')
-        model.set_data_at(2, 6, 'child11')
-        model.set_data_at(3, 6, 'child12')
+        model.set_data_at(1, 5, 'm task 1d')
+        model.set_data_at(2, 6, 'aaa')
+        model.set_data_at(3, 6, 'm task 2d')
+        model.set_data_at(4, 7, 'ccc')
+        model.set_data_at(5, 7, 'ddd')
+        model.set_data_at(6, 5, 'm task 1d 2')
 
-        model.set_data_at(5, 5, 'parent2')
-        model.set_data_at(6, 6, 'child21')
-        model.set_data_at(7, 6, 'child22')
+        model.set_data_at(1, model.check_col, Checker.MOVETO.str)
+        model.set_data_at(3, model.check_col, Checker.MOVETO.str)
+        model.set_data_at(6, model.check_col, Checker.MOVETO.str)
 
-        model.set_checker(1, Checker.MOVETO)
+        model.add_copy_from_last_date(Checker.MOVETO, None, Checker.PROGRESS, Checker.MISSED)
+        self.assertTrue(model.content_at(7, 0).startswith('2017'))
+        self.assertTrue(model.content_at(7, 5) == model.content_at(1, 5))
+        self.assertTrue(model.content_at(8, 6) == model.content_at(2, 6))
+        self.assertTrue(model.content_at(9, 6) == model.content_at(3, 6))
+        self.assertTrue(model.content_at(10, 7) == model.content_at(4, 7))
+        self.assertTrue(model.content_at(11, 7) == model.content_at(5, 7))
+        self.assertTrue(model.content_at(12, 5) == model.content_at(6, 5))
 
-        model.add_copy_from_last_date(Checker.MOVETO)
+        '''''''''''''''''''''''''''''''''''
+        exception : if there's prev date's last job  
+        '''''''''''''''''''''''''''''''''''
+        model.clear()
+        model.set_data_at(2, model.date_col, '2017-11-10')
+
+        model.set_data_at(1, 5, 'prev date data')
+        model.set_data_at(2, 5, 'm task 1d')
+        model.set_data_at(3, 6, 'aaa')
+        model.set_data_at(4, 6, 'm task 2d')
+        model.set_data_at(5, 7, 'ccc')
+        model.set_data_at(6, 7, 'ddd')
+        model.set_data_at(7, 5, 'm task 1d 2')
+
+        model.set_data_at(1, model.check_col, Checker.MOVETO.str)
+        model.set_data_at(2, model.check_col, Checker.MOVETO.str)
+        model.set_data_at(4, model.check_col, Checker.MOVETO.str)
+        model.set_data_at(7, model.check_col, Checker.MOVETO.str)
+
+        model.add_copy_from_last_date(Checker.MOVETO, None, Checker.PROGRESS, Checker.MISSED)
+        self.assertTrue(model.content_at(8, 0).startswith('2017'))
+        self.assertTrue(model.content_at(8, 5) == model.content_at(2, 5))
+        self.assertTrue(model.content_at(9, 6) == model.content_at(3, 6))
+        self.assertTrue(model.content_at(10, 6) == model.content_at(4, 6))
+        self.assertTrue(model.content_at(11, 7) == model.content_at(5, 7))
+        self.assertTrue(model.content_at(12, 7) == model.content_at(6, 7))
+        self.assertTrue(model.content_at(13, 5) == model.content_at(7, 5))
+
+
