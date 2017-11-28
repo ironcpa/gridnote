@@ -544,23 +544,30 @@ class TestWindow(QWidget):
         lineedit = QLineEdit()
         layout.addWidget(lineedit)
 
-        tab = QTabWidget()
-        tab.setTabBar(EditableTabBar(self))
+        self.tab = QTabWidget()
+        self.tab.setTabBar(EditableTabBar(self))
         tab_content1 = QWidget()
         tab_content2 = QWidget()
         split_view = SplitTableView()
 
-        tab.addTab(split_view, 'note 1')
-        tab.addTab(tab_content1, 'tab 1')
-        tab.addTab(tab_content2, 'tab 2')
+        self.tab.addTab(split_view, 'note 1')
+        self.tab.addTab(tab_content1, 'tab 1')
+        self.tab.addTab(tab_content2, 'tab 2')
 
-        layout.addWidget(tab)
+        layout.addWidget(self.tab)
 
         # find_widget = FindWidget(self)
         # find_widget.find_req.connect(self.dummy_slot)
         # find_widget.show()
 
-    def dummy_slot(self, arg):
+        btn_test = QPushButton('test')
+        btn_test.clicked.connect(self.dummy_slot)
+        layout.addWidget(btn_test)
+
+    def dummy_slot(self):
+        self.tab.removeTab(0)
+
+    def dummy_slot_1(self, arg):
         QMessageBox.information(self, 'test', str(arg))
 
 

@@ -355,9 +355,16 @@ class JobModel(NoteModel):
         sorted_copy_rows.sort()
 
         cur_row = self.get_last_row() + 1
+        moveto_rows = [i.row() for i in checker_content_indexes]
+        copied_moveto_rows = []
         for r in sorted_copy_rows:
             self.copy_rows(r, cur_row)
+            if r in moveto_rows:
+                copied_moveto_rows.append(cur_row)
             cur_row += 1
+
+        for r in copied_moveto_rows:
+            self.set_checker(r, Checker.MOVEFROM)
 
     def copy_rows(self, src_r, tgt_r):
         print('copy_rows: {}, {}'.format(src_r, tgt_r))
@@ -584,6 +591,8 @@ class MainWindow(QMainWindow):
         if not os.path.exists(path):
             return False
 
+        self.clear_tabs()
+
         with open(path, 'rb') as f:
             if self.load_models(pickle.load(f)):
                 self.set_path(path)
@@ -592,6 +601,11 @@ class MainWindow(QMainWindow):
                 return True
             else:
                 return False
+
+    def clear_tabs(self):
+        for i in range(self.tab_notes.count()):
+            self.tab_notes.removeTab(0)
+            self.views[i].close()
 
     def set_cur_view(self, view):
         self.cur_view = view
@@ -769,6 +783,8 @@ class MainWindow(QMainWindow):
         self.tab_notes.setCurrentWidget(view)
 
     def change_tab(self, tab_index):
+        if self.tab_notes.count() == 0:
+            return
         view = self.tab_notes.widget(tab_index)
         self.set_cur_view(view)
 
