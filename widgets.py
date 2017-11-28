@@ -491,6 +491,34 @@ class FindWidget(QWidget):
         self.txt_find_text.setFocus()
 
 
+class NotiWidget(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+
+        self.setGeometry(0, 0, 160, 60)
+
+        base_layout = QHBoxLayout()
+        self.setLayout(base_layout)
+
+        self.label = QLabel('saved')
+        self.label.setStyleSheet('QLabel {font: 20pt; color: white}')
+        self.label.setAlignment(Qt.AlignCenter)
+        base_layout.addWidget(self.label)
+
+    def paintEvent(self, e):
+        painter = QtGui.QPainter()
+        painter.begin(self)
+        painter.fillRect(self.rect(), Qt.red)
+        painter.end()
+        super().paintEvent(e)
+
+    def show_noti(self, text, color=None):
+        self.move(self.parent().width() - self.width(), 0)
+        self.label.setText(text)
+        self.show()
+        QTimer.singleShot(1000, self.hide)
+
+
 class TestLineEdit(QLineEdit):
     def __init__(self, parent):
         super().__init__(parent)

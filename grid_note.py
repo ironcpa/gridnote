@@ -442,6 +442,9 @@ class MainWindow(QMainWindow):
         self.setting_ui = SettingPane(self.centralWidget())
         self.setting_ui.hide()
 
+        self.save_noti = NotiWidget(self.centralWidget())
+        self.save_noti.hide()
+
     def init_view_settings(self, view):
         view.set_cell_size(int(self.txt_cell_width.text()), int(self.txt_cell_height.text()))
         view.set_cell_font_size(self.txt_cell_font_size.text())
@@ -687,7 +690,8 @@ class MainWindow(QMainWindow):
 
         self.save_ui_settings()
 
-        QMessageBox.information(self, 'save', 'saved')
+        # QMessageBox.information(self, 'save', 'saved')
+        self.save_noti.show_noti('saved')
 
     def set_path(self, path):
         self.txt_path.setText(path)
