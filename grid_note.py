@@ -479,7 +479,8 @@ class MainWindow(QMainWindow):
         if self.is_dev:
             self.open('test_note.note')
             return
-        self.open(cu.load_settings('last_file'))
+        # self.open(cu.load_settings('last_file'))
+        self.open('saves/sample.note')
 
     def init_focus_policy(self):
         self.txt_cell_width.setFocusPolicy(Qt.ClickFocus)
@@ -674,7 +675,9 @@ class MainWindow(QMainWindow):
                 self.cur_view.set_row_height(r, h)
 
     def move_to_last_index(self):
-        last_index = self.cur_model.index(cu.load_settings('last_row', 0), cu.load_settings('last_col', 0))
+        r = int(cu.load_settings('last_row'))
+        c = int(cu.load_settings('last_col'))
+        last_index = self.cur_model.index(r, c)
         self.cur_view.set_curr_index(last_index)
 
     def show_model_row_col(self):
@@ -715,7 +718,6 @@ class MainWindow(QMainWindow):
         # self.model = JobModel(default_list_data, self.undostack)
         # self.cur_view.set_model(self.model)
         # self.show_model_row_col()
-
         self.clear_all_views()
         self.set_path('')
 
@@ -1090,6 +1092,8 @@ def catch_exceptions(self, t, val, tb):
 
 
 if __name__ == "__main__":
+    cu.turn_off_pyqt_loop_log()
+
     old_hook = sys.excepthook
     sys.excepthook = catch_exceptions
 
