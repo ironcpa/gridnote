@@ -1,5 +1,5 @@
 from unittest import TestCase
-from lifemark_parser import Node, parse2nodes, tokenize
+from lifemark_parser import parse2nodes, tokenize
 
 
 class TestTextNode(TestCase):
@@ -11,7 +11,6 @@ class TestTextNode(TestCase):
         self.assertEqual(content, 'aaaa')
 
         text = "  +   aaaa"
-        tokens = text.split()
         indent, header, content = tokenize(text)
         self.assertEqual(indent, '  ')
         self.assertEqual(header, '+')
