@@ -2,7 +2,7 @@
 
 class Node:
     def __init__(self, indent, header, content):
-        self.indent = indent
+        self.indent = int(indent)
         self.header = header
         self.content = content
         self.children = []
@@ -12,10 +12,18 @@ class Node:
         return self.children[index]
 
     def __repr__(self):
-        return 'i={}, h={}: {}, p=<{}>'.format(len(self.indent),
+        return 'i={}, h={}: {}, p=<{}>'.format(self.indent,
                                                self.header,
                                                self.content,
                                                self.parent)
+
+    def __iter__(self):
+        return iter(self.children)
+
+    def depth_first(self):
+        yield self
+        for c in self:
+            yield from c.depth_first()
 
     def set_parent(self, parent):
         self.parent = parent
@@ -27,12 +35,14 @@ class Node:
 
 def split_spaces(text):
     spaces = ''
+    last_i = 0
     for i, c in enumerate(text):
+        last_i = i
         if c in (' ', '\t'):
             spaces += c
         else:
             break
-    return spaces, text[i:]
+    return spaces, text[last_i:]
 
 
 def tokenize(text):
@@ -43,23 +53,37 @@ def tokenize(text):
 
 
 def parse2nodes(text):
+    # how to ignore indent size
+    #  - sometimes it's only 1
+    #  - have to allow any length of sizes in single content
+    indent_size = 2
+
+    text = text.replace('\r', '')
     lines = text.split('\n')
-    root = Node('', '', 'root')
+    root = Node(0, '', 'root')
     prev = root
 
     for ln in lines:
-        indent, header, content = tokenize(ln)
-        depth = len(indent)
+        if len(ln) == 0:
+            break
+
+        depth, header, content = tokenize(ln)
+        indent = len(depth) / indent_size
+        if content != 'root':
+            indent += 1
 
         node = Node(indent, header, content)
 
+        indent_diff = node.indent - prev.indent
         if prev:
-            if prev == root or node.indent > prev.indent:
+            if indent_diff == 1:
                 prev.add_child(node)
-            elif node.indent == prev.indent:
+            elif indent_diff == 0:
                 prev.parent.add_child(node)
-            else:
+            elif indent_diff == -1:
                 prev.parent.parent.add_child(node)
+            elif indent_diff >= -2:
+                root.add_child(node)
 
         prev = node
         print(node)

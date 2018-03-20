@@ -426,6 +426,7 @@ class MainWindow(QMainWindow):
         self.btn_clear_bg_color = QPushButton('clear b-color')
         self.btn_add_tab = QPushButton('add tab')
         self.btn_create_new_date = QPushButton('new date')
+        self.btn_save_to_lifemark = QPushButton('save lifemark')
         buttonlayout.addWidget(self.btn_open)
         buttonlayout.addWidget(self.btn_save)
         buttonlayout.addWidget(self.btn_save_as)
@@ -434,6 +435,7 @@ class MainWindow(QMainWindow):
         buttonlayout.addWidget(self.btn_clear_bg_color)
         buttonlayout.addWidget(self.btn_add_tab)
         buttonlayout.addWidget(self.btn_create_new_date)
+        buttonlayout.addWidget(self.btn_save_to_lifemark)
 
         gridlayout.addLayout(settingLayout, 0, 0)
         gridlayout.addWidget(self.txt_path, 1, 0)
@@ -470,6 +472,7 @@ class MainWindow(QMainWindow):
         self.btn_clear_bg_color.clicked.connect(self.clear_bgcolor)
         self.btn_add_tab.clicked.connect(self.add_tab)
         self.btn_create_new_date.clicked.connect(self.create_new_date)
+        self.btn_save_to_lifemark.clicked.connect(self.save_to_lifemark)
 
         self.tab_notes.currentChanged.connect(self.change_tab)
 
@@ -809,6 +812,15 @@ class MainWindow(QMainWindow):
         self.cur_model.set_data_at(date_row, 0, date)
         self.move_to_index(self.cur_model.index(date_row, 5))
         self.cur_view.give_focus()
+
+    def save_to_lifemark(self):
+        '''
+        save content to lifemark daily category content linked w/ keys
+        this is possible when column 0's title is linked w/ lifemark's
+        daily contents
+        send update content w/ json request on lifemakr web service
+        '''
+        pass
 
     def copy_to_clipboard(self):
         selections = self.cur_view.selected_indexes()

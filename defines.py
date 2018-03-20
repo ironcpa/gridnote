@@ -28,6 +28,9 @@ class StyledNoteData(NoteData):
         super().__init__(r, c, content)
         self.bgcolor = bgcolor
 
+    def __repr__(self):
+        return 'StyledNoteData={}:{} {}'.format(self.r, self.c, self.content)
+
 
 class Checker:
     class Def:
@@ -41,10 +44,19 @@ class Checker:
 
     IGNORE = Def('-', Qt.yellow)
     PROGRESS = Def('>', Qt.blue, Qt.white)
+    DONE = Def('+', Qt.green)
+    MISSED = Def('x', Qt.red, Qt.white)
+    MOVETO = Def('p', Qt.darkCyan, Qt.white)
+    MOVEFROM = Def('<m', Qt.cyan)
+    # old checker def
+    '''
+    IGNORE = Def('-', Qt.yellow)
+    PROGRESS = Def('>', Qt.blue, Qt.white)
     DONE = Def('o', Qt.green)
     MISSED = Def('x', Qt.red, Qt.white)
     MOVETO = Def('m>', Qt.darkCyan, Qt.white)
     MOVEFROM = Def('<m', Qt.cyan)
+    '''
 
     @staticmethod
     def get_def(checker_str):

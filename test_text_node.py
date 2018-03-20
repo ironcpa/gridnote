@@ -18,10 +18,10 @@ class TestTextNode(TestCase):
 
     def test_parse_nodes(self):
         text = ("- aaaa\n"
-                " - bbbb\n"
-                " + cccc\n"
-                "  + dddd\n"
-                " + eeee\n"
+                "  - bbbb\n"
+                "  + cccc\n"
+                "    + dddd\n"
+                "  + eeee\n"
                 "+ ffff")
 
         root = parse2nodes(text)
@@ -35,8 +35,69 @@ class TestTextNode(TestCase):
         self.assertEqual(root.children[0].children[1].children[0].content, 'dddd')
         self.assertEqual(root.children[0].children[2].header, '+')
         self.assertEqual(root.children[0].children[2].content, 'eeee')
-        self.assertEqual(root.children[0].children[2].header, '+')
+        self.assertEqual(root.children[1].header, '+')
+        self.assertEqual(root.children[1].content, 'ffff')
+
+    def test_parse_nodes_various_indents(self):
+        text = ("- aaaa\n"
+                "  - bbbb\n"
+                "  > cccc\n"
+                "    + dddd\n"
+                "  p eeee\n"
+                "+ ffff")
+
+        root = parse2nodes(text)
+        self.assertEqual(root.children[0].header, '-')
+        self.assertEqual(root.children[0].content, 'aaaa')
+        self.assertEqual(root.children[0].children[0].header, '-')
+        self.assertEqual(root.children[0].children[0].content, 'bbbb')
+        self.assertEqual(root.children[0].children[1].header, '>')
+        self.assertEqual(root.children[0].children[1].content, 'cccc')
+        self.assertEqual(root.children[0].children[1].children[0].header, '+')
+        self.assertEqual(root.children[0].children[1].children[0].content, 'dddd')
+        self.assertEqual(root.children[0].children[2].header, 'p')
         self.assertEqual(root.children[0].children[2].content, 'eeee')
+        self.assertEqual(root.children[1].header, '+')
+        self.assertEqual(root.children[1].content, 'ffff')
+
+    def test_multi_root_children(self):
+        text = ("- aaaa\r\n"
+                "  - bbbb\r\n"
+                "    - cccc\r\n"
+                "+ dddd\r\n")
+
+        root = parse2nodes(text)
+        self.assertEqual(root.children[0].header, '-')
+        self.assertEqual(root.children[0].content, 'aaaa')
+        self.assertEqual(root.children[0].children[0].header, '-')
+        self.assertEqual(root.children[0].children[0].content, 'bbbb')
+        self.assertEqual(root.children[0].children[0].children[0].header, '-')
+        self.assertEqual(root.children[0].children[0].children[0].content, 'cccc')
+        self.assertEqual(root.children[1].header, '+')
+        self.assertEqual(root.children[1].content, 'dddd')
+
+    def test_parse_nodes_various_newline(self):
+        text = ("- aaaa\r\n"
+                "  - bbbb\r\n"
+                "  > cccc\r\n"
+                "    + dddd\r\n"
+                "  p eeee\r\n"
+                "    - dddd\r\n"
+                "+ ffff")
+
+        root = parse2nodes(text)
+        self.assertEqual(root.children[0].header, '-')
+        self.assertEqual(root.children[0].content, 'aaaa')
+        self.assertEqual(root.children[0].children[0].header, '-')
+        self.assertEqual(root.children[0].children[0].content, 'bbbb')
+        self.assertEqual(root.children[0].children[1].header, '>')
+        self.assertEqual(root.children[0].children[1].content, 'cccc')
+        self.assertEqual(root.children[0].children[1].children[0].header, '+')
+        self.assertEqual(root.children[0].children[1].children[0].content, 'dddd')
+        self.assertEqual(root.children[0].children[2].header, 'p')
+        self.assertEqual(root.children[0].children[2].content, 'eeee')
+        self.assertEqual(root.children[0].children[2].children[0].header, '-')
+        self.assertEqual(root.children[0].children[2].children[0].content, 'dddd')
         self.assertEqual(root.children[1].header, '+')
         self.assertEqual(root.children[1].content, 'ffff')
 
